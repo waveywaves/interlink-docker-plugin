@@ -9,8 +9,8 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 
 	commonIL "github.com/intertwin-eu/interlink/pkg/common"
-	docker "github.com/intertwin-eu/interlink-docker-plugin/pkg/docker"
-	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/gpustrategies"
+	docker "github.com/intertwin-eu/interlink/pkg/docker"
+	"github.com/intertwin-eu/interlink/pkg/docker/gpustrategies"
 )
 
 func main() {

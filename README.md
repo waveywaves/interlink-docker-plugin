@@ -41,3 +41,27 @@ To be configured on the repository settings.
   - Other checks as available and relevant
   - Require branches to be up to date before merging
 - Include administrators
+
+---
+## Build docker image
+
+Clone the repository with the following command:
+
+```bash
+git clone https://github.com/interTwin-eu/interlink-docker-plugin.git && cd interlink-docker-plugin
+```
+
+and run the following command to build the docker image:
+
+```bash
+docker build . -t  <image_name>:<tag> -f docker/Dockerfile.sidecar-docker 
+```
+
+---
+## Build the plugin executable
+
+To build the plugin executable, clone the repository and run the makefile:
+
+```bash
+git clone https://github.com/interTwin-eu/interlink-docker-plugin.git && cd interlink-docker-plugin && make 
+```

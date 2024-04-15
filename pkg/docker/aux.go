@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	commonIL "github.com/intertwin-eu/interlink/pkg/common"
-	"github.com/intertwin-eu/interlink-docker-plugin/pkg/sidecars/docker/gpustrategies"
+	"github.com/intertwin-eu/interlink/pkg/docker/gpustrategies"
 )
 
 type SidecarHandler struct {
