@@ -10,7 +10,7 @@ import (
 	"github.com/containerd/containerd/log"
 	v1 "k8s.io/api/core/v1"
 
-	commonIL "github.com/intertwin-eu/interlink/pkg/common"
+	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 )
 
 // StatusHandler checks Docker Container's status by running docker ps -af command and returns that status

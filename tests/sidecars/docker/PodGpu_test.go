@@ -16,7 +16,7 @@ import (
 
 	"io/ioutil"
 
-	"github.com/intertwin-eu/interlink/tests/sidecars/docker/templates" // replace with the actual module path
+	"github.com/intertwin-eu/interlink-docker-plugin/tests/sidecars/docker/templates" // replace with the actual module path
 	v1core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"

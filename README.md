@@ -48,7 +48,7 @@ To be configured on the repository settings.
 Clone the repository with the following command:
 
 ```bash
-git clone https://github.com/interTwin-eu/interlink-docker-plugin.git && cd interlink-docker-plugin
+git clone https://github.com/intertwin-eu/interlink-docker-plugin-docker-plugin.git && cd interlink-docker-plugin
 ```
 
 and run the following command to build the docker image:
@@ -63,5 +63,5 @@ docker build . -t  <image_name>:<tag> -f docker/Dockerfile.sidecar-docker
 To build the plugin executable, clone the repository and run the makefile:
 
 ```bash
-git clone https://github.com/interTwin-eu/interlink-docker-plugin.git && cd interlink-docker-plugin && make 
+git clone https://github.com/intertwin-eu/interlink-docker-plugin-docker-plugin.git && cd interlink-docker-plugin && make 
 ```

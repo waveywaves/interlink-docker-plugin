@@ -11,7 +11,7 @@ import (
 
 	"github.com/containerd/containerd/log"
 
-	commonIL "github.com/intertwin-eu/interlink/pkg/common"
+	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 )
 
 // GetLogsHandler performs a Docker logs command and returns its manipulated output

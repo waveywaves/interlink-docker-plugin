@@ -1,4 +1,4 @@
-module github.com/intertwin-eu/interlink
+module github.com/intertwin-eu/interlink-docker-plugin
 
 go 1.21
 

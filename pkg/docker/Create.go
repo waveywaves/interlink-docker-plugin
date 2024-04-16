@@ -12,7 +12,7 @@ import (
 	"github.com/containerd/containerd/log"
 	v1 "k8s.io/api/core/v1"
 
-	commonIL "github.com/intertwin-eu/interlink/pkg/common"
+	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 )
 
 // CreateHandler creates a Docker Container based on data provided by the InterLink API.
