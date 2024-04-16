@@ -30,6 +30,7 @@ type GPUManager struct {
 	GPUSpecsMutex sync.Mutex // Mutex to make GPUSpecsList access atomic
 	Vendor        string
 	Ctx           context.Context
+	NVMLstatus	  bool
 }
 
 type GPUManagerInterface interface {
@@ -49,14 +50,20 @@ func (a *GPUManager) Init() error {
 
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
+		a.NVMLstatus = false
 		return fmt.Errorf("Unable to initialize NVML")
 	}
+	a.NVMLstatus = true
 
 	return nil
 }
 
 // Discover implements the Discover function of the GPUManager interface
 func (a *GPUManager) Discover() error {
+
+	if !a.NVMLstatus {
+		return fmt.Errorf("NVML is not initialized")
+	}
 
 	log.G(a.Ctx).Info("Discovering GPUs...")
 
@@ -104,6 +111,10 @@ func (a *GPUManager) Discover() error {
 }
 
 func (a *GPUManager) Check() error {
+
+	if !a.NVMLstatus {
+		return fmt.Errorf("NVML is not initialized")
+	}
 
 	log.G(a.Ctx).Info("Checking the availability of GPUs...")
 
@@ -158,6 +169,10 @@ func (a *GPUManager) Check() error {
 }
 
 func (a *GPUManager) Shutdown() error {
+
+	if !a.NVMLstatus {
+		return fmt.Errorf("NVML is not initialized")
+	}
 
 	log.G(a.Ctx).Info("Shutting down NVML...")
 
