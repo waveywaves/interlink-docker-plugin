@@ -44,13 +44,16 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	podUID := string(req.PodUID)
+	containerName := podUID + "-" + req.ContainerName
+
 	//req = test
 
 	var cmd *OSexec.Cmd
 	if req.Opts.Timestamps {
-		cmd = OSexec.Command("docker", "logs", "-t", req.ContainerName)
+		cmd = OSexec.Command("docker", "logs", "-t", containerName)
 	} else {
-		cmd = OSexec.Command("docker", "logs", req.ContainerName)
+		cmd = OSexec.Command("docker", "logs", containerName)
 	}
 
 	output, err := cmd.CombinedOutput()

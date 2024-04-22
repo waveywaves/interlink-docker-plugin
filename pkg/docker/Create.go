@@ -64,6 +64,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		for _, container := range data.Pod.Spec.Containers {
 
+			// the name of the POD is the UID of the POD and the name of the container
+			containerName := podUID + "-" + container.Name
+
 			var isGpuRequested bool = false
 			var additionalGpuArgs []string
 
@@ -75,7 +78,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 				isGpuRequested = true
 
-				log.G(h.Ctx).Info("Container " + container.Name + " is requesting " + val.String() + " GPU")
+				log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
 
 				numGpusRequestedInt := int(numGpusRequested)
 				_, err := h.GpuManager.GetAvailableGPUs(numGpusRequestedInt)
@@ -85,7 +88,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				gpuSpecs, err := h.GpuManager.GetAndAssignAvailableGPUs(numGpusRequestedInt, container.Name)
+				gpuSpecs, err := h.GpuManager.GetAndAssignAvailableGPUs(numGpusRequestedInt, containerName)
 				if err != nil {
 					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
 					return
@@ -103,10 +106,10 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				additionalGpuArgs = append(additionalGpuArgs, "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES="+gpuUUIDs)
 
 			} else {
-				log.G(h.Ctx).Info("Container " + container.Name + " is not requesting a GPU")
+				log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
 			}
 
-			log.G(h.Ctx).Info("- Creating container " + container.Name)
+			log.G(h.Ctx).Info("- Creating container " + containerName)
 
 			var envVars string = ""
 			// add environment variables to the docker command
@@ -143,10 +146,10 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 			log.G(h.Ctx).Info("- The name of the container is " + container.Name)
 			log.G(h.Ctx).Info("- The pod UID is: " + podUID)
-			log.G(h.Ctx).Info("- The name of the POD will be: " + podUID)
+			log.G(h.Ctx).Info("- The final name of will be: " + containerName)
 
 
-			cmd := []string{"run", "-d", "--name", podUID}
+			cmd := []string{"run", "-d", "--name", containerName}
 
 			cmd = append(cmd, envVars)
 
@@ -201,34 +204,34 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if execReturn.Stdout == "" {
-				eval := "Conflict. The container name \"/" + container.Name + "\" is already in use"
+				eval := "Conflict. The container name \"/" + containerName + "\" is already in use"
 				if strings.Contains(execReturn.Stderr, eval) {
-					log.G(h.Ctx).Warning("Container named " + container.Name + " already exists. Skipping its creation.")
+					log.G(h.Ctx).Warning("Container named " + containerName + " already exists. Skipping its creation.")
 				} else {
-					log.G(h.Ctx).Error("Unable to create container " + container.Name + " : " + execReturn.Stderr)
+					log.G(h.Ctx).Error("Unable to create container " + containerName + " : " + execReturn.Stderr)
 					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
 					return
 				}
 			} else {
-				log.G(h.Ctx).Info("-- Created container " + container.Name)
+				log.G(h.Ctx).Info("-- Created container " + containerName)
 			}
 
 			shell = exec.ExecTask{
 				Command: "docker",
-				Args:    []string{"ps", "-aqf", "name=^" + container.Name + "$"},
+				Args:    []string{"ps", "-aqf", "name=^" + containerName + "$"},
 				Shell:   true,
 			}
 
 			execReturn, err = shell.Execute()
 			execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
 			if execReturn.Stderr != "" {
-				log.G(h.Ctx).Error("Failed to retrieve " + container.Name + " ID : " + execReturn.Stderr)
+				log.G(h.Ctx).Error("Failed to retrieve " + containerName + " ID : " + execReturn.Stderr)
 				HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
 				return
 			} else if execReturn.Stdout == "" {
 				log.G(h.Ctx).Error("Container name not found. Maybe creation failed?")
 			} else {
-				log.G(h.Ctx).Debug("-- Retrieved " + container.Name + " ID: " + execReturn.Stdout)
+				log.G(h.Ctx).Debug("-- Retrieved " + containerName + " ID: " + execReturn.Stdout)
 			}
 		}
 	}
