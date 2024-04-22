@@ -108,8 +108,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
 			}
 
-			log.G(h.Ctx).Info("- Creating container " + containerName)
-
 			var envVars string = ""
 			// add environment variables to the docker command
 			for _, envVar := range container.Env {
