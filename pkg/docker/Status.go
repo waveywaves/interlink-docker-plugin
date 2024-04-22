@@ -39,10 +39,16 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, pod := range req {
-		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: string(pod.UID), PodNamespace: pod.Namespace})
+
+		podUID := string(pod.UID)
+		podNamespace := string(pod.Namespace)
+
+		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace})
 		for _, container := range pod.Spec.Containers {
-			log.G(h.Ctx).Debug("- Getting status for container " + container.Name)
-			cmd := []string{"ps -af name=^" + container.Name + "$ --format \"{{.Status}}\""}
+			containerName := podNamespace + "-" + podUID + "-" + container.Name
+			
+			log.G(h.Ctx).Debug("- Getting status for container " + containerName)
+			cmd := []string{"ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
 
 			shell := exec.ExecTask{
 				Command: "docker",
@@ -63,20 +69,20 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 			// TODO: why first container?
 			if execReturn.Stdout != "" {
 				if containerstatus[0] == "Created" {
-					log.G(h.Ctx).Info("-- Container " + container.Name + " is going ready...")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
+					log.G(h.Ctx).Info("-- Container " + containerName + " is going ready...")
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 				} else if containerstatus[0] == "Up" {
-					log.G(h.Ctx).Info("-- Container " + container.Name + " is running")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
+					log.G(h.Ctx).Info("-- Container " + containerName + " is running")
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
 				} else if containerstatus[0] == "Exited" {
-					log.G(h.Ctx).Info("-- Container " + container.Name + " has been stopped")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+					log.G(h.Ctx).Info("-- Container " + containerName + " has been stopped")
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
 					// release all the GPUs from the container
-					h.GpuManager.Release(container.Name)
+					h.GpuManager.Release(containerName)
 				}
 			} else {
-				log.G(h.Ctx).Info("-- Container " + container.Name + " doesn't exist")
-				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+				log.G(h.Ctx).Info("-- Container " + containerName + " doesn't exist")
+				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
 			}
 		}
 	}

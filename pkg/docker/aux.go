@@ -31,12 +31,16 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 	mountedData := ""
 
 	for _, podData := range data {
-		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+string(podData.Pod.UID), os.ModePerm)
+
+		podUID := string(podData.Pod.UID)
+		podNamespace := string(podData.Pod.Namespace)
+
+		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+podUID, os.ModePerm)
 		if err != nil {
 			log.G(Ctx).Error(err)
 			return "", err
 		} else {
-			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + string(podData.Pod.UID))
+			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + podUID)
 		}
 
 		log.G(Ctx).Info("pod data values: " + fmt.Sprintf("%+v", podData))

@@ -37,11 +37,18 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	podUID := string(pod.PodUID)
+	podNamespace := string(req.Namespace)
+
+
 	for _, container := range pod.Spec.Containers {
-		log.G(h.Ctx).Debug("- Deleting container " + container.Name)
+
+		containerName := podNamespace + "-" + podUID + "-" + container.Name
+
+		log.G(h.Ctx).Debug("- Deleting container " + containerName)
 
 		// added a timeout to the stop container command
-		cmd := []string{"stop", "-t", "10", container.Name}
+		cmd := []string{"stop", "-t", "10", containerName}
 		shell := exec.ExecTask{
 			Command: "docker",
 			Args:    cmd,
@@ -51,9 +58,9 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 		if execReturn.Stderr != "" {
 			if strings.Contains(execReturn.Stderr, "No such container") {
-				log.G(h.Ctx).Debug("-- Unable to find container " + container.Name + ". Probably already removed? Skipping its removal")
+				log.G(h.Ctx).Debug("-- Unable to find container " + containerName + ". Probably already removed? Skipping its removal")
 			} else {
-				log.G(h.Ctx).Error("-- Error stopping container " + container.Name + ". Skipping its removal")
+				log.G(h.Ctx).Error("-- Error stopping container " + containerName + ". Skipping its removal")
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				w.Write([]byte("Some errors occurred while deleting container. Check Docker Sidecar's logs"))
@@ -73,18 +80,18 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 			execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
 
 			if execReturn.Stderr != "" {
-				log.G(h.Ctx).Error("-- Error deleting container " + container.Name)
+				log.G(h.Ctx).Error("-- Error deleting container " + containerName)
 				statusCode = http.StatusInternalServerError
 				w.WriteHeader(statusCode)
 				w.Write([]byte("Some errors occurred while deleting container. Check Docker Sidecar's logs"))
 				return
 			} else {
-				log.G(h.Ctx).Info("- Deleted container " + container.Name)
+				log.G(h.Ctx).Info("- Deleted container " + containerName)
 			}
 		}
 
 		// check if the container has GPU devices attacched using the GpuManager and release them
-		h.GpuManager.Release(container.Name)
+		h.GpuManager.Release(containerName)
 
 		os.RemoveAll(h.Config.DataRootFolder + pod.Namespace + "-" + string(pod.UID))
 	}
