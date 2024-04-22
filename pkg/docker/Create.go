@@ -36,6 +36,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, data := range req {
 
+		// get pod UID and save it in a variable
+		podUID := string(data.Pod.UID)
+
 		pathsOfVolumes := make(map[string]string)
 
 		for _, volume := range data.Pod.Spec.Volumes {
@@ -138,9 +141,12 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			log.G(h.Ctx).Info("- Creating container " + container.Name)
+			log.G(h.Ctx).Info("- The name of the container is " + container.Name)
+			log.G(h.Ctx).Info("- The pod UID is: " + podUID)
+			log.G(h.Ctx).Info("- The name of the POD will be: " + podUID)
 
-			cmd := []string{"run", "-d", "--name", container.Name}
+
+			cmd := []string{"run", "-d", "--name", podUID}
 
 			cmd = append(cmd, envVars)
 
