@@ -70,19 +70,19 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 			if execReturn.Stdout != "" {
 				if containerstatus[0] == "Created" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " is going ready...")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
+					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 				} else if containerstatus[0] == "Up" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " is running")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
+					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
 				} else if containerstatus[0] == "Exited" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " has been stopped")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
 					// release all the GPUs from the container
 					h.GpuManager.Release(containerName)
 				}
 			} else {
 				log.G(h.Ctx).Info("-- Container " + containerName + " doesn't exist")
-				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: containerName, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
 			}
 		}
 	}
