@@ -37,8 +37,8 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podUID := string(pod.PodUID)
-	podNamespace := string(req.Namespace)
+	podUID := string(pod.UID)
+	podNamespace := string(pod.Namespace)
 
 
 	for _, container := range pod.Spec.Containers {

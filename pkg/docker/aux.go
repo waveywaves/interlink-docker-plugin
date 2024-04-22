@@ -33,7 +33,6 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 	for _, podData := range data {
 
 		podUID := string(podData.Pod.UID)
-		podNamespace := string(podData.Pod.Namespace)
 
 		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+podUID, os.ModePerm)
 		if err != nil {
