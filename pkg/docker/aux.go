@@ -31,23 +31,27 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 	mountedData := ""
 
 	for _, podData := range data {
-		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+string(podData.Pod.UID), os.ModePerm)
+
+		podUID := string(podData.Pod.UID)
+		podNamespace := string(podData.Pod.UID)
+
+		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+podUID, os.ModePerm)
 		if err != nil {
 			log.G(Ctx).Error(err)
 			return "", err
 		} else {
-			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + string(podData.Pod.UID))
+			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + podUID)
 		}
 
-		log.G(Ctx).Info("pod data values: " + fmt.Sprintf("%+v", podData))
-
 		for _, cont := range podData.Containers {
+
+			containerName := podNamespace + "-" + podUID + "-" + container.Name
 
 			log.G(Ctx).Info("cont values: " + fmt.Sprintf("%+v", cont))
 
 			log.G(Ctx).Info("-- Inside Preparing mountpoints for " + cont.Name)
 			for _, cfgMap := range cont.ConfigMaps {
-				if container.Name == cont.Name {
+				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
 					log.G(Ctx).Info("-- Mounting ConfigMap " + cfgMap.Name)
 					paths, err := mountData(Ctx, config, podData.Pod, cfgMap, container)
 					if err != nil {
@@ -61,7 +65,7 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			}
 
 			for _, secret := range cont.Secrets {
-				if container.Name == cont.Name {
+				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
 					paths, err := mountData(Ctx, config, podData.Pod, secret, container)
 					if err != nil {
 						log.G(Ctx).Error("Error mounting Secret " + secret.Name)
@@ -74,7 +78,7 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			}
 
 			for _, emptyDir := range cont.EmptyDirs {
-				if container.Name == cont.Name {
+				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
 					paths, err := mountData(Ctx, config, podData.Pod, emptyDir, container)
 					if err != nil {
 						log.G(Ctx).Error("Error mounting EmptyDir " + emptyDir)
