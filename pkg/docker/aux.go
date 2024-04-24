@@ -51,9 +51,10 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 
 			log.G(Ctx).Info("-- Inside Preparing mountpoints for " + cont.Name)
 			for _, cfgMap := range cont.ConfigMaps {
-				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
+				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
 					log.G(Ctx).Info("-- Mounting ConfigMap " + cfgMap.Name)
 					paths, err := mountData(Ctx, config, podData.Pod, cfgMap, container)
+					log.G(Ctx).Info("-- Paths: " + strings.Join(paths, ","))
 					if err != nil {
 						log.G(Ctx).Error("Error mounting ConfigMap " + cfgMap.Name)
 						return "", errors.New("Error mounting ConfigMap " + cfgMap.Name)
@@ -65,7 +66,7 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			}
 
 			for _, secret := range cont.Secrets {
-				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
+				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
 					paths, err := mountData(Ctx, config, podData.Pod, secret, container)
 					if err != nil {
 						log.G(Ctx).Error("Error mounting Secret " + secret.Name)
@@ -78,7 +79,7 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			}
 
 			for _, emptyDir := range cont.EmptyDirs {
-				if containerName == podNamespace + "-" + podUID + "-" + cont.Name {
+				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
 					paths, err := mountData(Ctx, config, podData.Pod, emptyDir, container)
 					if err != nil {
 						log.G(Ctx).Error("Error mounting EmptyDir " + emptyDir)
@@ -141,7 +142,10 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 
 						if mount.Data != nil {
 							for key := range mount.Data {
-								path := filepath.Join(wd+podConfigMapDir, key)
+
+								log.G(Ctx).Info("Key: " + key)
+
+								path := filepath.Join(podConfigMapDir, key)
 								path += (":" + mountSpec.MountPath + "/" + key + " ")
 								configMapNamePaths = append(configMapNamePaths, path)
 							}

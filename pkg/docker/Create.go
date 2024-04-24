@@ -75,38 +75,47 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 				log.G(h.Ctx).Infof("Number of GPU requested: %d", numGpusRequested)
 
-				isGpuRequested = true
+				// if the container is requesting 0 GPU, skip the GPU assignment
+				if numGpusRequested == 0 {
+					log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
 
-				log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
+				} else {
 
-				numGpusRequestedInt := int(numGpusRequested)
-				_, err := h.GpuManager.GetAvailableGPUs(numGpusRequestedInt)
+					log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
 
-				if err != nil {
-					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
-					return
-				}
+					isGpuRequested = true
 
-				gpuSpecs, err := h.GpuManager.GetAndAssignAvailableGPUs(numGpusRequestedInt, containerName)
-				if err != nil {
-					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
-					return
-				}
+					numGpusRequestedInt := int(numGpusRequested)
+					_, err := h.GpuManager.GetAvailableGPUs(numGpusRequestedInt)
 
-				var gpuUUIDs string = ""
-				for _, gpuSpec := range gpuSpecs {
-					if gpuSpec.UUID == gpuSpecs[len(gpuSpecs)-1].UUID {
-						gpuUUIDs += strconv.Itoa(gpuSpec.Index)
-					} else {
-						gpuUUIDs += strconv.Itoa(gpuSpec.Index) + ","
+					if err != nil {
+						HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
+						return
 					}
-				}
 
-				additionalGpuArgs = append(additionalGpuArgs, "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES="+gpuUUIDs)
+					gpuSpecs, err := h.GpuManager.GetAndAssignAvailableGPUs(numGpusRequestedInt, containerName)
+					if err != nil {
+						HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
+						return
+					}
+
+					var gpuUUIDs string = ""
+					for _, gpuSpec := range gpuSpecs {
+						if gpuSpec.UUID == gpuSpecs[len(gpuSpecs)-1].UUID {
+							gpuUUIDs += strconv.Itoa(gpuSpec.Index)
+						} else {
+							gpuUUIDs += strconv.Itoa(gpuSpec.Index) + ","
+						}
+					}
+
+					additionalGpuArgs = append(additionalGpuArgs, "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES="+gpuUUIDs)
+				}
 
 			} else {
 				log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
 			}
+
+			log.G(h.Ctx).Info("-- Preparing environment variables for " + containerName)
 
 			var envVars string = ""
 			// add environment variables to the docker command
@@ -166,6 +175,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
 					return
 				}
+				// print the mounts for debugging
+				log.G(h.Ctx).Info("Mounts: " + mounts)
+
 				cmd = append(cmd, mounts)
 			}
 
