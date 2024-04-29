@@ -5,7 +5,6 @@ go 1.21
 toolchain go1.21.3
 
 require (
-	github.com/NVIDIA/go-nvml v0.12.0-4
 	github.com/alexellis/go-execute v0.6.0
 	github.com/containerd/containerd v1.7.15
 	github.com/docker/docker v26.0.1+incompatible
