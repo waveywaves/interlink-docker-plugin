@@ -140,13 +140,23 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 						podConfigMapDir := filepath.Join(wd+"/"+config.DataRootFolder, string(pod.UID)+"/", "configMaps/", vol.Name)
 						mode := os.FileMode(*podVolumeSpec.ConfigMap.DefaultMode)
 
+						correctMountPath := ""
+						for _, volumeMount := range container.VolumeMounts {
+							if volumeMount.Name == vol.Name {
+								correctMountPath = volumeMount.MountPath
+							}
+						}
+
 						if mount.Data != nil {
 							for key := range mount.Data {
 
 								log.G(Ctx).Info("Key: " + key)
 
 								path := filepath.Join(podConfigMapDir, key)
-								path += (":" + mountSpec.MountPath + "/" + key + " ")
+								path += (":" + correctMountPath + "/" + key + " ")
+
+								log.G(Ctx).Info("Path: " + path)
+
 								configMapNamePaths = append(configMapNamePaths, path)
 							}
 						}
@@ -264,7 +274,7 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 							log.G(Ctx).Debug("-- Created EmptyDir in " + edPath)
 						}
 
-						edPath += (":" + mountSpec.MountPath + "/" + mountSpec.Name + " ")
+						edPath += (":" + mountSpec.MountPath + "/")
 						return []string{edPath}, nil
 					}
 				}
