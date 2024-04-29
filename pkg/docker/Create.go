@@ -66,55 +66,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
 
-			var isGpuRequested bool = false
-			var additionalGpuArgs []string
-
-			if val, ok := container.Resources.Limits["nvidia.com/gpu"]; ok {
-
-				numGpusRequested := val.Value()
-
-				log.G(h.Ctx).Infof("Number of GPU requested: %d", numGpusRequested)
-
-				// if the container is requesting 0 GPU, skip the GPU assignment
-				if numGpusRequested == 0 {
-					log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
-
-				} else {
-
-					log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
-
-					isGpuRequested = true
-
-					numGpusRequestedInt := int(numGpusRequested)
-					_, err := h.GpuManager.GetAvailableGPUs(numGpusRequestedInt)
-
-					if err != nil {
-						HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
-						return
-					}
-
-					gpuSpecs, err := h.GpuManager.GetAndAssignAvailableGPUs(numGpusRequestedInt, containerName)
-					if err != nil {
-						HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
-						return
-					}
-
-					var gpuUUIDs string = ""
-					for _, gpuSpec := range gpuSpecs {
-						if gpuSpec.UUID == gpuSpecs[len(gpuSpecs)-1].UUID {
-							gpuUUIDs += strconv.Itoa(gpuSpec.Index)
-						} else {
-							gpuUUIDs += strconv.Itoa(gpuSpec.Index) + ","
-						}
-					}
-
-					additionalGpuArgs = append(additionalGpuArgs, "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES="+gpuUUIDs)
-				}
-
-			} else {
-				log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
-			}
-
 			log.G(h.Ctx).Info("-- Preparing environment variables for " + containerName)
 
 			var envVars string = ""
@@ -155,10 +106,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			cmd := []string{"run", "-d", "--name", containerName}
 
 			cmd = append(cmd, envVars)
-
-			if isGpuRequested {
-				cmd = append(cmd, additionalGpuArgs...)
-			}
 
 			var additionalPortArgs []string
 			for _, port := range container.Ports {

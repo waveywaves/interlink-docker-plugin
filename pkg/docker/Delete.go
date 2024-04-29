@@ -40,7 +40,6 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	podUID := string(pod.UID)
 	podNamespace := string(pod.Namespace)
 
-
 	for _, container := range pod.Spec.Containers {
 
 		containerName := podNamespace + "-" + podUID + "-" + container.Name
@@ -89,9 +88,6 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 				log.G(h.Ctx).Info("- Deleted container " + containerName)
 			}
 		}
-
-		// check if the container has GPU devices attacched using the GpuManager and release them
-		h.GpuManager.Release(containerName)
 
 		os.RemoveAll(h.Config.DataRootFolder + pod.Namespace + "-" + string(pod.UID))
 	}

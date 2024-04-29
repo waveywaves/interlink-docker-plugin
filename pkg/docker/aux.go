@@ -14,13 +14,11 @@ import (
 	"fmt"
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
-	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/gpustrategies"
 )
 
 type SidecarHandler struct {
-	Config     commonIL.InterLinkConfig
-	Ctx        context.Context
-	GpuManager gpustrategies.GPUManagerInterface
+	Config commonIL.InterLinkConfig
+	Ctx    context.Context
 }
 
 // prepareMounts iterates along the struct provided in the data parameter and checks for ConfigMaps, Secrets and EmptyDirs to be mounted.
