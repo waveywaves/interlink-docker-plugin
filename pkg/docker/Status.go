@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	exec "github.com/alexellis/go-execute/pkg/v1"
@@ -46,7 +47,7 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace})
 		for _, container := range pod.Spec.Containers {
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
-			
+
 			log.G(h.Ctx).Debug("- Getting status for container " + containerName)
 			cmd := []string{"ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
 
@@ -70,13 +71,20 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 			if execReturn.Stdout != "" {
 				if containerstatus[0] == "Created" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " is going ready...")
-					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 				} else if containerstatus[0] == "Up" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " is running")
-					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
 				} else if containerstatus[0] == "Exited" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " has been stopped")
-					resp[i].Containers = append(resp[i].Containers,v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+					containerExitCode := strings.Split(containerstatus[1], "(")
+					exitCode, err := strconv.Atoi(strings.Trim(containerExitCode[1], ")"))
+					if err != nil {
+						log.G(h.Ctx).Error(err)
+						exitCode = 0
+					}
+					log.G(h.Ctx).Info("-- Container exit code is: " + strconv.Itoa(exitCode))
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{ExitCode: int32(exitCode)}}, Ready: false})
 					// release all the GPUs from the container
 					h.GpuManager.Release(containerName)
 				}

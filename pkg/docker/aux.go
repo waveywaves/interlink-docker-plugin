@@ -23,6 +23,65 @@ type SidecarHandler struct {
 	GpuManager gpustrategies.GPUManagerInterface
 }
 
+func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.InterLinkConfig, data []commonIL.RetrievedPodData, container v1.Container) ([]string, []string, []string, error) {
+
+	podUID := ""
+	podNamespace := ""
+
+	for _, podData := range data {
+		podUID = string(podData.Pod.UID)
+		podNamespace = string(podData.Pod.Namespace)
+	}
+
+	if container.Command == nil {
+		return []string{}, container.Command, container.Args, nil
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		log.G(Ctx).Error(err)
+		return nil, nil, nil, err
+	}
+
+	if len(container.Command) > 0 {
+		if container.Command[0] == "/bin/bash" || container.Command[0] == "/bin/sh" {
+			fileName := "script.sh"
+			if len(container.Command) > 1 {
+				if strings.HasSuffix(container.Command[1], ".sh") {
+					return []string{}, container.Command, container.Args, nil
+				}
+				if container.Command[1] == "-c" {
+					// get the actual current path of the folder
+					fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
+					log.G(Ctx).Info("Creating file " + fileNamePath)
+					err = os.WriteFile(fileNamePath, []byte(container.Args[0]), 0644)
+					if err != nil {
+						log.G(Ctx).Error(err)
+						return nil, nil, nil, err
+					}
+					return []string{"-v " + fileNamePath + ":/" + fileName}, []string{container.Command[0] + " /" + fileName}, []string{}, nil
+				}
+			}
+		} else if strings.HasPrefix(container.Command[0], "python") {
+			fileName := "script.py"
+			if container.Command[1] == "-c" {
+				fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
+				log.G(Ctx).Info("Creating file " + fileNamePath)
+				err = os.WriteFile(fileNamePath, []byte(container.Args[0]), 0644)
+				if err != nil {
+					log.G(Ctx).Error(err)
+					return nil, nil, nil, err
+				}
+				return []string{"-v " + fileNamePath + ":/" + fileName}, []string{container.Command[0] + " /" + fileName}, []string{}, nil
+			}
+		} else {
+			return []string{}, container.Command, container.Args, nil
+		}
+
+	}
+	return []string{}, container.Command, container.Args, nil
+}
+
 // prepareMounts iterates along the struct provided in the data parameter and checks for ConfigMaps, Secrets and EmptyDirs to be mounted.
 // For each element found, the mountData function is called.
 // It returns a string composed as the docker -v command to bind mount directories and files and the first encountered error.
@@ -79,6 +138,7 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			}
 
 			for _, emptyDir := range cont.EmptyDirs {
+				log.G(Ctx).Info("-- EmptyDir to handle " + emptyDir)
 				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
 					paths, err := mountData(Ctx, config, podData.Pod, emptyDir, container)
 					if err != nil {
@@ -257,6 +317,25 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 					if podVolumeSpec != nil && podVolumeSpec.EmptyDir != nil {
 						var edPath string
 
+						parts := strings.Split(data.(string), "/")
+						emptyDirName := parts[len(parts)-1]
+						if emptyDirName != vol.Name {
+							log.G(Ctx).Info("Skipping " + vol.Name + " as it is not the same as " + emptyDirName)
+							continue
+						}
+
+						emptyDirMountPath := ""
+						isReadOnly := false
+						for _, mountSpec := range container.VolumeMounts {
+							if mountSpec.Name == vol.Name {
+								emptyDirMountPath = mountSpec.MountPath
+								if mountSpec.ReadOnly {
+									isReadOnly = true
+								}
+								break
+							}
+						}
+
 						edPath = filepath.Join(wd+"/"+config.DataRootFolder, string(pod.UID)+"/"+"emptyDirs/"+vol.Name)
 						log.G(Ctx).Info("-- Creating EmptyDir in " + edPath)
 						cmd := []string{"-p " + edPath}
@@ -274,8 +353,14 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 							log.G(Ctx).Debug("-- Created EmptyDir in " + edPath)
 						}
 
-						edPath += (":" + mountSpec.MountPath + "/")
-						return []string{edPath}, nil
+						// if the emptyDir is read only, append :ro to the path
+						if isReadOnly {
+							edPath += (":" + emptyDirMountPath + "/:ro")
+							return []string{edPath}, nil
+						} else {
+							edPath += (":" + emptyDirMountPath + "/")
+							return []string{edPath}, nil
+						}
 					}
 				}
 			}

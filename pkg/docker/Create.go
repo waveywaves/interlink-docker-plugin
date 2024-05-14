@@ -181,9 +181,44 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				cmd = append(cmd, mounts)
 			}
 
+			memoryLimitsArray := []string{}
+			cpuLimitsArray := []string{}
+
+			if container.Resources.Limits.Memory().Value() != 0 {
+				memoryLimitsArray = append(memoryLimitsArray, "--memory", strconv.Itoa(int(container.Resources.Limits.Memory().Value()))+"b")
+			}
+			if container.Resources.Limits.Cpu().Value() != 0 {
+				cpuLimitsArray = append(cpuLimitsArray, "--cpus", strconv.FormatFloat(float64(container.Resources.Limits.Cpu().Value()), 'f', -1, 64))
+			}
+
+			cmd = append(cmd, memoryLimitsArray...)
+			cmd = append(cmd, cpuLimitsArray...)
+
+			containerCommands := []string{}
+			containerArgs := []string{}
+			mountFileCommand := []string{}
+
+			// if container has a command and args, call parseContainerCommandAndReturnArgs
+			if len(container.Command) > 0 || len(container.Args) > 0 {
+				log.G(h.Ctx).Info("Container has command and args defined. Parsing...")
+				log.G(h.Ctx).Info("Container command: " + strings.Join(container.Command, " "))
+				log.G(h.Ctx).Info("Container args: " + strings.Join(container.Args, " "))
+
+				mountFileCommand, containerCommands, containerArgs, err = parseContainerCommandAndReturnArgs(h.Ctx, h.Config, req, container)
+				if err != nil {
+					HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
+					return
+				}
+				cmd = append(cmd, mountFileCommand...)
+			}
+
+			// log container commands and args
+			log.G(h.Ctx).Info("Container commands: " + strings.Join(containerCommands, " "))
+			log.G(h.Ctx).Info("Container args: " + strings.Join(containerArgs, " "))
+
 			cmd = append(cmd, container.Image)
-			cmd = append(cmd, container.Command...)
-			cmd = append(cmd, container.Args...)
+			cmd = append(cmd, containerCommands...)
+			cmd = append(cmd, containerArgs...)
 
 			dockerOptions := ""
 
@@ -194,14 +229,13 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			// print the docker command
-			log.G(h.Ctx).Info("Docker command: " + "docker" + dockerOptions + " " + strings.Join(cmd, " "))
-
 			shell := exec.ExecTask{
 				Command: "docker" + dockerOptions,
 				Args:    cmd,
 				Shell:   true,
 			}
+
+			log.G(h.Ctx).Info("Docker command: " + strings.Join(shell.Args, " "))
 
 			execReturn, err = shell.Execute()
 			if err != nil {
