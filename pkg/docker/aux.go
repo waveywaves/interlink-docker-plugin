@@ -31,6 +31,18 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 	for _, podData := range data {
 		podUID = string(podData.Pod.UID)
 		podNamespace = string(podData.Pod.Namespace)
+
+		// check if the directory exists, if not create it
+		dirPath := config.DataRootFolder + podData.Pod.Namespace + "-" + podUID
+		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+			err := os.MkdirAll(dirPath, os.ModePerm)
+			if err != nil {
+				log.G(Ctx).Error(err)
+			} else {
+				log.G(Ctx).Info("-- Created directory " + dirPath)
+			}
+		}
+
 	}
 
 	if container.Command == nil {
