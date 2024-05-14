@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	exec "github.com/alexellis/go-execute/pkg/v1"
@@ -76,7 +77,16 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
 				} else if containerstatus[0] == "Exited" {
 					log.G(h.Ctx).Info("-- Container " + containerName + " has been stopped")
-					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+					containerExitCode := strings.Split(containerstatus[1], "(")
+					exitCode, err := strconv.Atoi(strings.Trim(containerExitCode[1], ")"))
+					if err != nil {
+						log.G(h.Ctx).Error(err)
+						exitCode = 0
+					}
+					log.G(h.Ctx).Info("-- Container exit code is: " + strconv.Itoa(exitCode))
+					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{ExitCode: int32(exitCode)}}, Ready: false})
+					// release all the GPUs from the container
+					h.GpuManager.Release(containerName)
 				}
 			} else {
 				log.G(h.Ctx).Info("-- Container " + containerName + " doesn't exist")
