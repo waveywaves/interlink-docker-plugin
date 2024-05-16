@@ -103,6 +103,8 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 
 	for _, podData := range data {
 
+		log.G(Ctx).Info("-- pod data ", podData)
+
 		podUID := string(podData.Pod.UID)
 		podNamespace := string(podData.Pod.UID)
 
@@ -114,7 +116,18 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []
 			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + podUID)
 		}
 
-		for _, cont := range podData.Containers {
+		// print the len of the init containers
+		log.G(Ctx).Info("Init containers: " + fmt.Sprintf("%+v", podData.InitContainers))
+
+		allContainers := append(podData.Containers, podData.InitContainers...)
+
+		log.G(Ctx).Info("All containers: " + fmt.Sprintf("%+v", allContainers))
+
+		for _, cont := range allContainers {
+
+			if cont.Name != container.Name {
+				continue
+			}
 
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
 
@@ -184,199 +197,199 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 
 	log.G(Ctx).Info("Inside mountData ")
 
-	if config.ExportPodData {
+	//if config.ExportPodData {
 
-		log.G(Ctx).Info("Mounting data for " + container.Name)
+	log.G(Ctx).Info("Mounting data for " + container.Name)
 
-		for _, mountSpec := range container.VolumeMounts {
+	for _, mountSpec := range container.VolumeMounts {
 
-			log.G(Ctx).Info("Mounting " + mountSpec.Name + " at " + mountSpec.MountPath)
+		log.G(Ctx).Info("Mounting " + mountSpec.Name + " at " + mountSpec.MountPath)
 
-			var podVolumeSpec *v1.VolumeSource
+		var podVolumeSpec *v1.VolumeSource
 
-			for _, vol := range pod.Spec.Volumes {
-				if vol.Name == mountSpec.Name {
-					podVolumeSpec = &vol.VolumeSource
+		for _, vol := range pod.Spec.Volumes {
+			if vol.Name == mountSpec.Name {
+				podVolumeSpec = &vol.VolumeSource
+			}
+
+			switch mount := data.(type) {
+			case v1.ConfigMap:
+				var configMapNamePaths []string
+				err := os.RemoveAll(config.DataRootFolder + pod.Namespace + "-" + string(pod.UID) + "/" + "configMaps/" + vol.Name)
+
+				if err != nil {
+					log.G(Ctx).Error("Unable to delete root folder")
+					return nil, err
+				}
+				if podVolumeSpec != nil && podVolumeSpec.ConfigMap != nil {
+					podConfigMapDir := filepath.Join(wd+"/"+config.DataRootFolder+pod.Namespace+"-"+string(pod.UID)+"/", "configMaps/", vol.Name)
+					mode := os.FileMode(*podVolumeSpec.ConfigMap.DefaultMode)
+
+					correctMountPath := ""
+					for _, volumeMount := range container.VolumeMounts {
+						if volumeMount.Name == vol.Name {
+							correctMountPath = volumeMount.MountPath
+						}
+					}
+
+					if mount.Data != nil {
+						for key := range mount.Data {
+
+							log.G(Ctx).Info("Key: " + key)
+
+							path := filepath.Join(podConfigMapDir, key)
+							path += (":" + correctMountPath + "/" + key + " ")
+
+							log.G(Ctx).Info("Path: " + path)
+
+							configMapNamePaths = append(configMapNamePaths, path)
+						}
+					}
+
+					cmd := []string{"-p " + podConfigMapDir}
+					shell := exec2.ExecTask{
+						Command: "mkdir",
+						Args:    cmd,
+						Shell:   true,
+					}
+
+					execReturn, _ := shell.Execute()
+					if execReturn.Stderr != "" {
+						log.G(Ctx).Error(err)
+						return nil, err
+					} else {
+						log.G(Ctx).Debug("-- Created directory " + podConfigMapDir)
+					}
+
+					log.G(Ctx).Info("-- Writing ConfigMaps files")
+					for k, v := range mount.Data {
+						// TODO: Ensure that these files are deleted in failure cases
+						fullPath := filepath.Join(podConfigMapDir, k)
+						os.WriteFile(fullPath, []byte(v), mode)
+						if err != nil {
+							log.G(Ctx).Errorf("Could not write ConfigMap file %s", fullPath)
+							err = os.RemoveAll(fullPath)
+							if err != nil {
+								log.G(Ctx).Error("Unable to remove file " + fullPath)
+							}
+							return nil, err
+						} else {
+							log.G(Ctx).Debug("--- Written ConfigMap file " + fullPath)
+						}
+					}
+					return configMapNamePaths, nil
 				}
 
-				switch mount := data.(type) {
-				case v1.ConfigMap:
-					var configMapNamePaths []string
-					err := os.RemoveAll(config.DataRootFolder + string(pod.UID) + "/" + "configMaps/" + vol.Name)
+			case v1.Secret:
+				var secretNamePaths []string
+				err := os.RemoveAll(config.DataRootFolder + pod.Namespace + "-" + string(pod.UID) + "/" + "secrets/" + vol.Name)
 
-					if err != nil {
-						log.G(Ctx).Error("Unable to delete root folder")
+				if err != nil {
+					log.G(Ctx).Error("Unable to delete root folder")
+					return nil, err
+				}
+				if podVolumeSpec != nil && podVolumeSpec.Secret != nil {
+					mode := os.FileMode(*podVolumeSpec.Secret.DefaultMode)
+					podSecretDir := filepath.Join(wd+"/"+config.DataRootFolder+pod.Namespace+"-"+string(pod.UID)+"/", "secrets/", vol.Name)
+
+					if mount.Data != nil {
+						for key := range mount.Data {
+							path := filepath.Join(podSecretDir, key)
+							path += (":" + mountSpec.MountPath + "/" + key + " ")
+							secretNamePaths = append(secretNamePaths, path)
+						}
+					}
+
+					cmd := []string{"-p " + podSecretDir}
+					shell := exec2.ExecTask{
+						Command: "mkdir",
+						Args:    cmd,
+						Shell:   true,
+					}
+
+					execReturn, _ := shell.Execute()
+					if strings.Compare(execReturn.Stdout, "") != 0 {
+						log.G(Ctx).Error(err)
 						return nil, err
 					}
-					if podVolumeSpec != nil && podVolumeSpec.ConfigMap != nil {
-						podConfigMapDir := filepath.Join(wd+"/"+config.DataRootFolder, string(pod.UID)+"/", "configMaps/", vol.Name)
-						mode := os.FileMode(*podVolumeSpec.ConfigMap.DefaultMode)
-
-						correctMountPath := ""
-						for _, volumeMount := range container.VolumeMounts {
-							if volumeMount.Name == vol.Name {
-								correctMountPath = volumeMount.MountPath
-							}
-						}
-
-						if mount.Data != nil {
-							for key := range mount.Data {
-
-								log.G(Ctx).Info("Key: " + key)
-
-								path := filepath.Join(podConfigMapDir, key)
-								path += (":" + correctMountPath + "/" + key + " ")
-
-								log.G(Ctx).Info("Path: " + path)
-
-								configMapNamePaths = append(configMapNamePaths, path)
-							}
-						}
-
-						cmd := []string{"-p " + podConfigMapDir}
-						shell := exec2.ExecTask{
-							Command: "mkdir",
-							Args:    cmd,
-							Shell:   true,
-						}
-
-						execReturn, _ := shell.Execute()
-						if execReturn.Stderr != "" {
-							log.G(Ctx).Error(err)
-							return nil, err
-						} else {
-							log.G(Ctx).Debug("-- Created directory " + podConfigMapDir)
-						}
-
-						log.G(Ctx).Info("-- Writing ConfigMaps files")
-						for k, v := range mount.Data {
-							// TODO: Ensure that these files are deleted in failure cases
-							fullPath := filepath.Join(podConfigMapDir, k)
-							os.WriteFile(fullPath, []byte(v), mode)
-							if err != nil {
-								log.G(Ctx).Errorf("Could not write ConfigMap file %s", fullPath)
-								err = os.RemoveAll(fullPath)
-								if err != nil {
-									log.G(Ctx).Error("Unable to remove file " + fullPath)
-								}
-								return nil, err
-							} else {
-								log.G(Ctx).Debug("--- Written ConfigMap file " + fullPath)
-							}
-						}
-						return configMapNamePaths, nil
+					if execReturn.Stderr != "" {
+						log.G(Ctx).Error(execReturn.Stderr)
+						return nil, errors.New(execReturn.Stderr)
+					} else {
+						log.G(Ctx).Debug("-- Created directory " + podSecretDir)
 					}
 
-				case v1.Secret:
-					var secretNamePaths []string
-					err := os.RemoveAll(config.DataRootFolder + string(pod.UID) + "/" + "secrets/" + vol.Name)
-
-					if err != nil {
-						log.G(Ctx).Error("Unable to delete root folder")
-						return nil, err
-					}
-					if podVolumeSpec != nil && podVolumeSpec.Secret != nil {
-						mode := os.FileMode(*podVolumeSpec.Secret.DefaultMode)
-						podSecretDir := filepath.Join(wd+"/"+config.DataRootFolder, string(pod.UID)+"/", "secrets/", vol.Name)
-
-						if mount.Data != nil {
-							for key := range mount.Data {
-								path := filepath.Join(podSecretDir, key)
-								path += (":" + mountSpec.MountPath + "/" + key + " ")
-								secretNamePaths = append(secretNamePaths, path)
-							}
-						}
-
-						cmd := []string{"-p " + podSecretDir}
-						shell := exec2.ExecTask{
-							Command: "mkdir",
-							Args:    cmd,
-							Shell:   true,
-						}
-
-						execReturn, _ := shell.Execute()
-						if strings.Compare(execReturn.Stdout, "") != 0 {
-							log.G(Ctx).Error(err)
-							return nil, err
-						}
-						if execReturn.Stderr != "" {
-							log.G(Ctx).Error(execReturn.Stderr)
-							return nil, errors.New(execReturn.Stderr)
-						} else {
-							log.G(Ctx).Debug("-- Created directory " + podSecretDir)
-						}
-
-						log.G(Ctx).Info("-- Writing Secret files")
-						for k, v := range mount.Data {
-							// TODO: Ensure that these files are deleted in failure cases
-							fullPath := filepath.Join(podSecretDir, k)
-							os.WriteFile(fullPath, v, mode)
-							if err != nil {
-								log.G(Ctx).Errorf("Could not write Secret file %s", fullPath)
-								err = os.RemoveAll(fullPath)
-								if err != nil {
-									log.G(Ctx).Error("Unable to remove file " + fullPath)
-								}
-								return nil, err
-							} else {
-								log.G(Ctx).Debug("--- Written Secret file " + fullPath)
-							}
-						}
-						return secretNamePaths, nil
-					}
-
-				case string:
-					if podVolumeSpec != nil && podVolumeSpec.EmptyDir != nil {
-						var edPath string
-
-						parts := strings.Split(data.(string), "/")
-						emptyDirName := parts[len(parts)-1]
-						if emptyDirName != vol.Name {
-							log.G(Ctx).Info("Skipping " + vol.Name + " as it is not the same as " + emptyDirName)
-							continue
-						}
-
-						emptyDirMountPath := ""
-						isReadOnly := false
-						for _, mountSpec := range container.VolumeMounts {
-							if mountSpec.Name == vol.Name {
-								emptyDirMountPath = mountSpec.MountPath
-								if mountSpec.ReadOnly {
-									isReadOnly = true
-								}
-								break
-							}
-						}
-
-						edPath = filepath.Join(wd+"/"+config.DataRootFolder, string(pod.UID)+"/"+"emptyDirs/"+vol.Name)
-						log.G(Ctx).Info("-- Creating EmptyDir in " + edPath)
-						cmd := []string{"-p " + edPath}
-						shell := exec2.ExecTask{
-							Command: "mkdir",
-							Args:    cmd,
-							Shell:   true,
-						}
-
-						_, err := shell.Execute()
+					log.G(Ctx).Info("-- Writing Secret files")
+					for k, v := range mount.Data {
+						// TODO: Ensure that these files are deleted in failure cases
+						fullPath := filepath.Join(podSecretDir, k)
+						os.WriteFile(fullPath, v, mode)
 						if err != nil {
-							log.G(Ctx).Error(err)
-							return []string{""}, nil
+							log.G(Ctx).Errorf("Could not write Secret file %s", fullPath)
+							err = os.RemoveAll(fullPath)
+							if err != nil {
+								log.G(Ctx).Error("Unable to remove file " + fullPath)
+							}
+							return nil, err
 						} else {
-							log.G(Ctx).Debug("-- Created EmptyDir in " + edPath)
+							log.G(Ctx).Debug("--- Written Secret file " + fullPath)
 						}
+					}
+					return secretNamePaths, nil
+				}
 
-						// if the emptyDir is read only, append :ro to the path
-						if isReadOnly {
-							edPath += (":" + emptyDirMountPath + "/:ro")
-							return []string{edPath}, nil
-						} else {
-							edPath += (":" + emptyDirMountPath + "/")
-							return []string{edPath}, nil
+			case string:
+				if podVolumeSpec != nil && podVolumeSpec.EmptyDir != nil {
+					var edPath string
+
+					parts := strings.Split(data.(string), "/")
+					emptyDirName := parts[len(parts)-1]
+					if emptyDirName != vol.Name {
+						log.G(Ctx).Info("Skipping " + vol.Name + " as it is not the same as " + emptyDirName)
+						continue
+					}
+
+					emptyDirMountPath := ""
+					isReadOnly := false
+					for _, mountSpec := range container.VolumeMounts {
+						if mountSpec.Name == vol.Name {
+							emptyDirMountPath = mountSpec.MountPath
+							if mountSpec.ReadOnly {
+								isReadOnly = true
+							}
+							break
 						}
+					}
+
+					edPath = filepath.Join(wd + "/" + config.DataRootFolder + pod.Namespace + "-" + string(pod.UID) + "/" + "emptyDirs/" + vol.Name)
+					log.G(Ctx).Info("-- Creating EmptyDir in " + edPath)
+					cmd := []string{"-p " + edPath}
+					shell := exec2.ExecTask{
+						Command: "mkdir",
+						Args:    cmd,
+						Shell:   true,
+					}
+
+					_, err := shell.Execute()
+					if err != nil {
+						log.G(Ctx).Error(err)
+						return []string{""}, nil
+					} else {
+						log.G(Ctx).Debug("-- Created EmptyDir in " + edPath)
+					}
+
+					// if the emptyDir is read only, append :ro to the path
+					if isReadOnly {
+						edPath += (":" + emptyDirMountPath + "/:ro")
+						return []string{edPath}, nil
+					} else {
+						edPath += (":" + emptyDirMountPath + "/")
+						return []string{edPath}, nil
 					}
 				}
 			}
 		}
 	}
+	//}
 	return nil, err
 }
