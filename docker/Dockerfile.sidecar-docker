@@ -2,7 +2,7 @@ FROM golang:1.21 as build-stage
 
 WORKDIR /app
 COPY .. .
-RUN CGO_ENABLED=1 GOOS=linux go build -o bin/docker-sidecar cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o bin/docker-sidecar cmd/main.go
 
 FROM bash:latest as bash-stage
 
@@ -11,12 +11,19 @@ FROM docker:24.0-dind-rootless AS build-release-stage
 
 WORKDIR /
 
+USER root:root
+
+RUN mkdir -p /sidecar && chown -R 1000:1000 /sidecar
+
+
+USER 1000:1000
+
 COPY --from=build-stage /app/bin/docker-sidecar /sidecar/docker-sidecar
 
 # adding bash binary to be able to perform commands within the sidecar binary
 COPY --from=bash-stage /usr/local/bin/bash /bin 
 
-USER root:root
+ENV INTERLINKCONFIGPATH=/InterLinkConfig.yaml
 
 ENV PATH "$PATH:/bin"
 
@@ -24,11 +31,6 @@ ENV PATH "$PATH:/bin"
 RUN echo -e '#!/bin/bash\ndockerd-entrypoint.sh & /sidecar/docker-sidecar' > /sidecar/startup-docker.sh
 RUN chmod +x /sidecar/startup-docker.sh
 RUN chmod +x /sidecar/docker-sidecar
-RUN chmod -R 777 /sidecar
-
-ENV INTERLINKCONFIGPATH=/InterLinkConfig.yaml
-
-USER 1000:1000
 
 #setting up the path for the docker daemon
 ENV DOCKER_HOST=unix:///run/user/1000/docker.sock
