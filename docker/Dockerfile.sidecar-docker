@@ -30,7 +30,6 @@ ENV PATH "$PATH:/bin"
 #creating a simple startup script to start both docker rootless and the sidecar
 RUN echo -e '#!/bin/bash\ndockerd-entrypoint.sh & /sidecar/docker-sidecar' > /sidecar/startup-docker.sh
 RUN chmod +x /sidecar/startup-docker.sh
-RUN chmod +x /sidecar/docker-sidecar
 
 #setting up the path for the docker daemon
 ENV DOCKER_HOST=unix:///run/user/1000/docker.sock
