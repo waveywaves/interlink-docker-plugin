@@ -15,10 +15,11 @@ type PodCreateRequests struct {
 
 // PodStatus is a simplified v1.Pod struct, holding only necessary variables to uniquely identify a job/service in the sidecar. It is used to request
 type PodStatus struct {
-	PodName      string               `json:"name"`
-	PodUID       string               `json:"UID"`
-	PodNamespace string               `json:"namespace"`
-	Containers   []v1.ContainerStatus `json:"containers"`
+	PodName        string               `json:"name"`
+	PodUID         string               `json:"UID"`
+	PodNamespace   string               `json:"namespace"`
+	Containers     []v1.ContainerStatus `json:"containers"`
+	InitContainers []v1.ContainerStatus `json:"initContainers"`
 }
 
 // RetrievedContainer is used in InterLink to rearrange data structure in a suitable way for the sidecar
@@ -31,8 +32,9 @@ type RetrievedContainer struct {
 
 // RetrievedPoData is used in InterLink to rearrange data structure in a suitable way for the sidecar
 type RetrievedPodData struct {
-	Pod        v1.Pod               `json:"pod"`
-	Containers []RetrievedContainer `json:"container"`
+	Pod            v1.Pod               `json:"pod"`
+	Containers     []RetrievedContainer `json:"container"`
+	InitContainers []RetrievedContainer `json:"initContainer"`
 }
 
 // InterLinkConfig holds the whole configuration
