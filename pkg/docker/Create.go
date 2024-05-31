@@ -169,16 +169,19 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				//}
 
 				memoryLimitsArray := []string{}
+				uLimitMemoryArray := []string{}
 				cpuLimitsArray := []string{}
 
 				if container.Resources.Limits.Memory().Value() != 0 {
 					memoryLimitsArray = append(memoryLimitsArray, "--memory", strconv.Itoa(int(container.Resources.Limits.Memory().Value()))+"b")
+					uLimitMemoryArray = append(uLimitMemoryArray, "--ulimits", "\"memlock="+strconv.Itoa(int(container.Resources.Limits.Memory().Value()))+"\"")
 				}
 				if container.Resources.Limits.Cpu().Value() != 0 {
 					cpuLimitsArray = append(cpuLimitsArray, "--cpus", strconv.FormatFloat(float64(container.Resources.Limits.Cpu().Value()), 'f', -1, 64))
 				}
 
 				cmd = append(cmd, memoryLimitsArray...)
+				cmd = append(cmd, uLimitMemoryArray...)
 				cmd = append(cmd, cpuLimitsArray...)
 
 				containerCommands := []string{}
