@@ -146,10 +146,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 					//cmd = append(cmd, "--security-opt=apparmor:unconfined")
 				}
 
-				if isGpuRequested {
-					cmd = append(cmd, additionalGpuArgs...)
-				}
-
 				var additionalPortArgs []string
 
 				for _, port := range container.Ports {
