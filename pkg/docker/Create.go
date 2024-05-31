@@ -31,6 +31,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	var req []commonIL.RetrievedPodData
 	err = json.Unmarshal(bodyBytes, &req)
 
+	// log the received data
+	log.G(h.Ctx).Info("Received data: " + string(bodyBytes))
+
 	if err != nil {
 		HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, nil)
 		return
@@ -69,6 +72,17 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			"initContainers": data.Pod.Spec.InitContainers,
 			"containers":     data.Pod.Spec.Containers,
 		}
+
+		// // if allContainers is greater than 0, create a network for the pod
+		// if len(allContainers) > 0 {
+		// 	// create a network for the pod
+		// 	shell := exec.ExecTask{
+		// 		Command: "docker",
+		// 		Args:    []string{"network", "create", podNamespace + "-" + podUID},
+		// 		Shell:   true,
+		// 	}
+		// 	shell.Execute()
+		// }
 
 		// iterate over all containers
 		for containerType, containers := range allContainers {
@@ -174,11 +188,19 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 				cmd = append(cmd, envVars)
 
+				if container.SecurityContext != nil && container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged {
+					cmd = append(cmd, "--privileged")
+					//cmd = append(cmd, "--cap-add=SYS_ADMIN")
+					//cmd = append(cmd, "--device=/dev/fuse")
+					//cmd = append(cmd, "--security-opt=apparmor:unconfined")
+				}
+
 				if isGpuRequested {
 					cmd = append(cmd, additionalGpuArgs...)
 				}
 
 				var additionalPortArgs []string
+
 				for _, port := range container.Ports {
 					if port.HostPort != 0 {
 						additionalPortArgs = append(additionalPortArgs, "-p", strconv.Itoa(int(port.HostPort))+":"+strconv.Itoa(int(port.ContainerPort)))

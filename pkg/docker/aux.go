@@ -49,6 +49,8 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 		return []string{}, container.Command, container.Args, nil
 	}
 
+	prefileName := container.Name + "_" + podUID + "_" + podNamespace
+
 	wd, err := os.Getwd()
 	if err != nil {
 		log.G(Ctx).Error(err)
@@ -57,7 +59,7 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 
 	if len(container.Command) > 0 {
 		if container.Command[0] == "/bin/bash" || container.Command[0] == "/bin/sh" {
-			fileName := "script.sh"
+			fileName := prefileName + "_script.sh"
 			if len(container.Command) > 1 {
 				if strings.HasSuffix(container.Command[1], ".sh") {
 					return []string{}, container.Command, container.Args, nil
@@ -75,7 +77,7 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 				}
 			}
 		} else if strings.HasPrefix(container.Command[0], "python") {
-			fileName := "script.py"
+			fileName := prefileName + "_script.py"
 			if container.Command[1] == "-c" {
 				fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
 				log.G(Ctx).Info("Creating file " + fileNamePath)
@@ -351,12 +353,16 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 
 					emptyDirMountPath := ""
 					isReadOnly := false
+					//isBidirectional := false
 					for _, mountSpec := range container.VolumeMounts {
 						if mountSpec.Name == vol.Name {
 							emptyDirMountPath = mountSpec.MountPath
 							if mountSpec.ReadOnly {
 								isReadOnly = true
 							}
+							// if mountSpec.MountPropagation != nil && *mountSpec.MountPropagation == v1.MountPropagationBidirectional {
+							// 	isBidirectional = true
+							// }
 							break
 						}
 					}
@@ -381,11 +387,11 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 					// if the emptyDir is read only, append :ro to the path
 					if isReadOnly {
 						edPath += (":" + emptyDirMountPath + "/:ro")
-						return []string{edPath}, nil
 					} else {
 						edPath += (":" + emptyDirMountPath + "/")
-						return []string{edPath}, nil
 					}
+
+					return []string{edPath}, nil
 				}
 			}
 		}

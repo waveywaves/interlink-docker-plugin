@@ -49,14 +49,41 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 
 	containerName := podNamespace + "-" + podUID + "-" + req.ContainerName
 
-	var cmd *OSexec.Cmd
+	//var cmd *OSexec.Cmd
+	// here check if the container exists, if not returm empty logs, exec docker ps and check if the container is listed in the output, if not return 
+	// http.StatusOk and empty logs
+	cmd := OSexec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.G(h.Ctx).Error(err)
+		statusCode = http.StatusInternalServerError
+		w.WriteHeader(statusCode)
+		return
+	}
+
+	lines := strings.Split(string(output), "\n")
+	found := false
+	for _, line := range lines {
+		if line == containerName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		w.WriteHeader(statusCode)
+		w.Write([]byte("No logs available for container " + containerName + ". Container not found."))
+		return
+	}
+	
+
+	//var cmd *OSexec.Cmd
 	if req.Opts.Timestamps {
 		cmd = OSexec.Command("docker", "logs", "-t", containerName)
 	} else {
 		cmd = OSexec.Command("docker", "logs", containerName)
 	}
 
-	output, err := cmd.CombinedOutput()
+	output, err = cmd.CombinedOutput()
 
 	if err != nil {
 		log.G(h.Ctx).Error(err)
