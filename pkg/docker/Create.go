@@ -17,6 +17,7 @@ import (
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 
+	OSexec "os/exec"
 	"path/filepath"
 )
 
@@ -24,6 +25,7 @@ type DockerRunStruct struct {
 	Name            string `json:"name"`
 	Command         string `json:"command"`
 	IsInitContainer bool   `json:"isInitContainer"`
+	GpuArgs         string `json:"gpuArgs"`
 }
 
 // prepareDockerRuns functions return an array of DockerRunStruct objects or error, which are used to create the Docker containers
@@ -33,6 +35,7 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 
 	// initialize an empy DockerRunStruct array
 	var dockerRunStructs []DockerRunStruct
+	var gpuArgs string = ""
 
 	//for _, data := range podData {
 
@@ -98,7 +101,6 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 
 				numGpusRequested := val.Value()
 
-				numGpusRequested = 0
 				// if the container is requesting 0 GPU, skip the GPU assignment
 				if numGpusRequested == 0 {
 					log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
@@ -132,6 +134,7 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 					}
 
 					additionalGpuArgs = append(additionalGpuArgs, "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES="+gpuUUIDs)
+					gpuArgs = "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=" + gpuUUIDs
 				}
 
 			} else {
@@ -278,6 +281,7 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 				Name:            containerName,
 				Command:         "docker " + strings.Join(shell.Args, " "),
 				IsInitContainer: isInitContainer,
+				GpuArgs:         gpuArgs,
 			})
 		}
 		//}
@@ -333,6 +337,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		// from dockerRunStructs, create two arrays: one for initContainers and one for containers
 		var initContainers []DockerRunStruct
 		var containers []DockerRunStruct
+		var gpuArgs string
 
 		for _, dockerRunStruct := range dockerRunStructs {
 			if dockerRunStruct.IsInitContainer {
@@ -342,14 +347,31 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// check if between the containers there is a container that requires a GPU
+		for _, container := range containers {
+			if container.GpuArgs != "" {
+				gpuArgs = container.GpuArgs
+			}
+		}
+
+		gpuArgsAsArray := []string{}
+		if gpuArgs != "" {
+			gpuArgsAsArray = strings.Split(gpuArgs, " ")
+		}
+
+		// logs gpuArgsAsArray
+		log.G(h.Ctx).Info("GPU Args: ", gpuArgsAsArray)
+
+		dindContainerArgs := []string{"run"}
+		dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
+		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", "ghcr.io/extrality/nvidia-dind")
+
 		var dindContainerID string
 		shell := exec.ExecTask{
 			Command: "docker",
-			Args:    []string{"run", "--privileged", "-v", "/home:/home", "-v", "/mnt/docker-data/:/var/lib/docker", "-d", "--name", string(data.Pod.UID) + "_dind", "docker:dind"},
+			Args:    dindContainerArgs,
+			Shell:   true,
 		}
-
-		// log the command to exec
-		log.G(h.Ctx).Info("Executing command: docker " + strings.Join(shell.Args, " "))
 
 		execReturn, err = shell.Execute()
 		if err != nil {
@@ -361,26 +383,21 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		// wait until the dind container is up and running by check that the command docker ps inside of it does not return an error
 		for {
-			shell = exec.ExecTask{
-				Command: "docker",
-				Args:    []string{"exec", string(data.Pod.UID) + "_dind", "docker", "run", "--rm", "ubuntu:latest"},
-			}
 
-			execReturn, err = shell.Execute()
+			cmd := OSexec.Command("docker", "logs", string(data.Pod.UID)+"_dind")
+			output, err := cmd.CombinedOutput()
+
 			if err != nil {
 				log.G(h.Ctx).Error("Failed to check if dind container is up and running: " + err.Error())
 				time.Sleep(1 * time.Second) // Wait for a second before polling again
 			}
 
-			if execReturn.ExitCode == 0 {
-				log.G(h.Ctx).Info("Docker dind container is up and running")
+			if strings.Contains(string(output), "API listen on /var/run/docker.sock") {
 				break
 			} else {
-				log.G(h.Ctx).Info("Docker dind container is not up and running")
-				log.G(h.Ctx).Info("execReturn.ExitCode ", execReturn.ExitCode)
-				log.G(h.Ctx).Info("execReturn.Stderr ", execReturn.Stderr)
 				time.Sleep(1 * time.Second) // Wait for a second before polling again
 			}
+
 		}
 
 		if len(initContainers) > 0 {
