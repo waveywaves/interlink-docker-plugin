@@ -50,9 +50,9 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 	containerName := podNamespace + "-" + podUID + "-" + req.ContainerName
 
 	//var cmd *OSexec.Cmd
-	// here check if the container exists, if not returm empty logs, exec docker ps and check if the container is listed in the output, if not return 
+	// here check if the container exists, if not returm empty logs, exec docker ps and check if the container is listed in the output, if not return
 	// http.StatusOk and empty logs
-	cmd := OSexec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
+	cmd := OSexec.Command("docker", "exec", podUID+"_dind", "docker", "ps", "-a", "--format", "{{.Names}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.G(h.Ctx).Error(err)
@@ -74,13 +74,12 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 		w.Write([]byte("No logs available for container " + containerName + ". Container not found."))
 		return
 	}
-	
 
 	//var cmd *OSexec.Cmd
 	if req.Opts.Timestamps {
-		cmd = OSexec.Command("docker", "logs", "-t", containerName)
+		cmd = OSexec.Command("docker", "exec", podUID+"_dind", "docker", "logs", "-t", containerName)
 	} else {
-		cmd = OSexec.Command("docker", "logs", containerName)
+		cmd = OSexec.Command("docker", "exec", podUID+"_dind", "docker", "logs", containerName)
 	}
 
 	output, err = cmd.CombinedOutput()

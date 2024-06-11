@@ -40,7 +40,6 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	podUID := string(pod.UID)
 	podNamespace := string(pod.Namespace)
 
-
 	for _, container := range pod.Spec.Containers {
 
 		containerName := podNamespace + "-" + podUID + "-" + container.Name
@@ -48,7 +47,7 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		log.G(h.Ctx).Debug("- Deleting container " + containerName)
 
 		// added a timeout to the stop container command
-		cmd := []string{"stop", "-t", "10", containerName}
+		cmd := []string{"exec", podUID + "_dind", "docker", "stop", "-t", "10", containerName}
 		shell := exec.ExecTask{
 			Command: "docker",
 			Args:    cmd,
@@ -70,7 +69,7 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if execReturn.Stdout != "" {
-			cmd = []string{"rm", execReturn.Stdout}
+			cmd = []string{"exec", podUID + "_dind", "docker", "rm", execReturn.Stdout}
 			shell = exec.ExecTask{
 				Command: "docker",
 				Args:    cmd,
@@ -88,6 +87,25 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				log.G(h.Ctx).Info("- Deleted container " + containerName)
 			}
+		}
+
+		cmd = []string{"rm", "-f", podUID + "_dind"}
+		shell = exec.ExecTask{
+			Command: "docker",
+			Args:    cmd,
+			Shell:   true,
+		}
+		execReturn, _ = shell.Execute()
+		execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
+
+		if execReturn.Stderr != "" {
+			log.G(h.Ctx).Error("-- Error deleting container " + podUID + "_dind")
+			statusCode = http.StatusInternalServerError
+			w.WriteHeader(statusCode)
+			w.Write([]byte("Some errors occurred while deleting container. Check Docker Sidecar's logs"))
+			return
+		} else {
+			log.G(h.Ctx).Info("- Deleted container " + podUID + "_dind")
 		}
 
 		// check if the container has GPU devices attacched using the GpuManager and release them

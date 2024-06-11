@@ -49,7 +49,7 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
 
 			log.G(h.Ctx).Debug("- Getting status for container " + containerName)
-			cmd := []string{"ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
+			cmd := []string{"exec " + podUID + "_dind" + " docker ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
 
 			shell := exec.ExecTask{
 				Command: "docker",
@@ -90,7 +90,7 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				log.G(h.Ctx).Info("-- Container " + containerName + " doesn't exist")
-				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 			}
 		}
 	}

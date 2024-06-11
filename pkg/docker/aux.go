@@ -23,27 +23,27 @@ type SidecarHandler struct {
 	GpuManager gpustrategies.GPUManagerInterface
 }
 
-func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.InterLinkConfig, data []commonIL.RetrievedPodData, container v1.Container) ([]string, []string, []string, error) {
+func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.InterLinkConfig, podUID string, podNamespace string, container v1.Container) ([]string, []string, []string, error) {
 
-	podUID := ""
-	podNamespace := ""
+	//podUID := ""
+	//podNamespace := ""
 
-	for _, podData := range data {
-		podUID = string(podData.Pod.UID)
-		podNamespace = string(podData.Pod.Namespace)
+	//for _, podData := range data {
+	//podUID = string(podData.Pod.UID)
+	//podNamespace = string(podData.Pod.Namespace)
 
-		// check if the directory exists, if not create it
-		dirPath := config.DataRootFolder + podData.Pod.Namespace + "-" + podUID
-		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-			err := os.MkdirAll(dirPath, os.ModePerm)
-			if err != nil {
-				log.G(Ctx).Error(err)
-			} else {
-				log.G(Ctx).Info("-- Created directory " + dirPath)
-			}
+	// check if the directory exists, if not create it
+	dirPath := config.DataRootFolder + podNamespace + "-" + podUID
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err := os.MkdirAll(dirPath, os.ModePerm)
+		if err != nil {
+			log.G(Ctx).Error(err)
+		} else {
+			log.G(Ctx).Info("-- Created directory " + dirPath)
 		}
-
 	}
+
+	//}
 
 	if container.Command == nil {
 		return []string{}, container.Command, container.Args, nil
@@ -101,86 +101,84 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 // prepareMounts iterates along the struct provided in the data parameter and checks for ConfigMaps, Secrets and EmptyDirs to be mounted.
 // For each element found, the mountData function is called.
 // It returns a string composed as the docker -v command to bind mount directories and files and the first encountered error.
-func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data []commonIL.RetrievedPodData, container v1.Container) (string, error) {
+func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data commonIL.RetrievedPodData, container v1.Container) (string, error) {
 	log.G(Ctx).Info("- Preparing mountpoints for " + container.Name)
 	mountedData := ""
 
-	for _, podData := range data {
+	//for _, podData := range data {
 
-		log.G(Ctx).Info("-- pod data ", podData)
+	podUID := string(data.Pod.UID)
+	podNamespace := string(data.Pod.UID)
 
-		podUID := string(podData.Pod.UID)
-		podNamespace := string(podData.Pod.UID)
+	err := os.MkdirAll(config.DataRootFolder+data.Pod.Namespace+"-"+podUID, os.ModePerm)
+	if err != nil {
+		log.G(Ctx).Error(err)
+		return "", err
+	} else {
+		log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + data.Pod.Namespace + "-" + podUID)
+	}
 
-		err := os.MkdirAll(config.DataRootFolder+podData.Pod.Namespace+"-"+podUID, os.ModePerm)
-		if err != nil {
-			log.G(Ctx).Error(err)
-			return "", err
-		} else {
-			log.G(Ctx).Info("-- Created directory " + config.DataRootFolder + podData.Pod.Namespace + "-" + podUID)
+	// print the len of the init containers
+	log.G(Ctx).Info("Init containers: " + fmt.Sprintf("%+v", data.InitContainers))
+
+	allContainers := append(data.Containers, data.InitContainers...)
+
+	log.G(Ctx).Info("All containers: " + fmt.Sprintf("%+v", allContainers))
+
+	for _, cont := range allContainers {
+
+		if cont.Name != container.Name {
+			continue
 		}
 
-		// print the len of the init containers
-		log.G(Ctx).Info("Init containers: " + fmt.Sprintf("%+v", podData.InitContainers))
+		containerName := podNamespace + "-" + podUID + "-" + container.Name
 
-		allContainers := append(podData.Containers, podData.InitContainers...)
+		log.G(Ctx).Info("cont values: " + fmt.Sprintf("%+v", cont))
 
-		log.G(Ctx).Info("All containers: " + fmt.Sprintf("%+v", allContainers))
-
-		for _, cont := range allContainers {
-
-			if cont.Name != container.Name {
-				continue
-			}
-
-			containerName := podNamespace + "-" + podUID + "-" + container.Name
-
-			log.G(Ctx).Info("cont values: " + fmt.Sprintf("%+v", cont))
-
-			log.G(Ctx).Info("-- Inside Preparing mountpoints for " + cont.Name)
-			for _, cfgMap := range cont.ConfigMaps {
-				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
-					log.G(Ctx).Info("-- Mounting ConfigMap " + cfgMap.Name)
-					paths, err := mountData(Ctx, config, podData.Pod, cfgMap, container)
-					log.G(Ctx).Info("-- Paths: " + strings.Join(paths, ","))
-					if err != nil {
-						log.G(Ctx).Error("Error mounting ConfigMap " + cfgMap.Name)
-						return "", errors.New("Error mounting ConfigMap " + cfgMap.Name)
-					}
-					for _, path := range paths {
-						mountedData += "-v " + path + " "
-					}
+		log.G(Ctx).Info("-- Inside Preparing mountpoints for " + cont.Name)
+		for _, cfgMap := range cont.ConfigMaps {
+			if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
+				log.G(Ctx).Info("-- Mounting ConfigMap " + cfgMap.Name)
+				paths, err := mountData(Ctx, config, data.Pod, cfgMap, container)
+				log.G(Ctx).Info("-- Paths: " + strings.Join(paths, ","))
+				if err != nil {
+					log.G(Ctx).Error("Error mounting ConfigMap " + cfgMap.Name)
+					return "", errors.New("Error mounting ConfigMap " + cfgMap.Name)
+				}
+				for _, path := range paths {
+					mountedData += "-v " + path + " "
 				}
 			}
+		}
 
-			for _, secret := range cont.Secrets {
-				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
-					paths, err := mountData(Ctx, config, podData.Pod, secret, container)
-					if err != nil {
-						log.G(Ctx).Error("Error mounting Secret " + secret.Name)
-						return "", errors.New("Error mounting Secret " + secret.Name)
-					}
-					for _, path := range paths {
-						mountedData += "-v " + path + " "
-					}
+		for _, secret := range cont.Secrets {
+			if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
+				paths, err := mountData(Ctx, config, data.Pod, secret, container)
+				if err != nil {
+					log.G(Ctx).Error("Error mounting Secret " + secret.Name)
+					return "", errors.New("Error mounting Secret " + secret.Name)
+				}
+				for _, path := range paths {
+					mountedData += "-v " + path + " "
 				}
 			}
+		}
 
-			for _, emptyDir := range cont.EmptyDirs {
-				log.G(Ctx).Info("-- EmptyDir to handle " + emptyDir)
-				if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
-					paths, err := mountData(Ctx, config, podData.Pod, emptyDir, container)
-					if err != nil {
-						log.G(Ctx).Error("Error mounting EmptyDir " + emptyDir)
-						return "", errors.New("Error mounting EmptyDir " + emptyDir)
-					}
-					for _, path := range paths {
-						mountedData += "-v " + path + " "
-					}
+		for _, emptyDir := range cont.EmptyDirs {
+			log.G(Ctx).Info("-- EmptyDir to handle " + emptyDir)
+			if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
+				paths, err := mountData(Ctx, config, data.Pod, emptyDir, container)
+				if err != nil {
+					log.G(Ctx).Error("Error mounting EmptyDir " + emptyDir)
+					return "", errors.New("Error mounting EmptyDir " + emptyDir)
+				}
+				for _, path := range paths {
+					mountedData += "-v " + path + " "
 				}
 			}
 		}
 	}
+	//}
 
 	if last := len(mountedData) - 1; last >= 0 && mountedData[last] == ',' {
 		mountedData = mountedData[:last]
@@ -356,7 +354,7 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 					emptyDirMountPath := ""
 					isReadOnly := false
 					isBidirectional := false
-
+					//isBidirectional := false
 					for _, mountSpec := range container.VolumeMounts {
 						if mountSpec.Name == vol.Name {
 							emptyDirMountPath = mountSpec.MountPath
@@ -366,6 +364,9 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 							if mountSpec.MountPropagation != nil && *mountSpec.MountPropagation == v1.MountPropagationBidirectional {
 								isBidirectional = true
 							}
+							// if mountSpec.MountPropagation != nil && *mountSpec.MountPropagation == v1.MountPropagationBidirectional {
+							// 	isBidirectional = true
+							// }
 							break
 						}
 					}
