@@ -165,7 +165,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 							envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath + ":ro"
 						} else {
 							// if it is Bidirectional, add :shared to the volume
-							if *volumeMount.MountPropagation == v1.MountPropagationBidirectional {
+							if volumeMount.MountPropagation != nil && *volumeMount.MountPropagation == v1.MountPropagationBidirectional {
 								envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath + ":shared"
 							} else {
 								envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath
