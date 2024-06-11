@@ -31,9 +31,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	var req []commonIL.RetrievedPodData
 	err = json.Unmarshal(bodyBytes, &req)
 
-	// log the received data
-	log.G(h.Ctx).Info("Received data: " + string(bodyBytes))
-
 	if err != nil {
 		HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, nil)
 		return
@@ -49,52 +46,48 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		for _, volume := range data.Pod.Spec.Volumes {
 			if volume.HostPath != nil {
 				if *volume.HostPath.Type == v1.HostPathDirectoryOrCreate || *volume.HostPath.Type == v1.HostPathDirectory {
-					_, err := os.Stat(volume.HostPath.Path + "/" + volume.Name)
-					if os.IsNotExist(err) {
-						log.G(h.Ctx).Info("-- Creating directory " + volume.HostPath.Path + "/" + volume.Name)
-						err = os.MkdirAll(volume.HostPath.Path+"/"+volume.Name, os.ModePerm)
-						if err != nil {
+					_, err := os.Stat(volume.HostPath.Path)
+					if *volume.HostPath.Type == v1.HostPathDirectory {
+						if os.IsNotExist(err) {
 							HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
-						} else {
-							log.G(h.Ctx).Info("-- Created directory " + volume.HostPath.Path)
-							pathsOfVolumes[volume.Name] = volume.HostPath.Path + "/" + volume.Name
+							return
 						}
-					} else {
-						log.G(h.Ctx).Info("-- Directory " + volume.HostPath.Path + "/" + volume.Name + " already exists")
-						pathsOfVolumes[volume.Name] = volume.HostPath.Path + "/" + volume.Name
+						pathsOfVolumes[volume.Name] = volume.HostPath.Path
+					} else if *volume.HostPath.Type == v1.HostPathDirectoryOrCreate {
+						if os.IsNotExist(err) {
+							err = os.MkdirAll(volume.HostPath.Path, os.ModePerm)
+							if err != nil {
+								HandleErrorAndRemoveData(h, w, statusCode, "Some errors occurred while creating container. Check Docker Sidecar's logs", err, &data)
+								return
+							} else {
+								pathsOfVolumes[volume.Name] = volume.HostPath.Path
+							}
+						} else {
+							pathsOfVolumes[volume.Name] = volume.HostPath.Path
+						}
 					}
 				}
 			}
+
+			if volume.PersistentVolumeClaim != nil {
+				if _, ok := pathsOfVolumes[volume.PersistentVolumeClaim.ClaimName]; !ok {
+					// WIP: This is a temporary solution to mount CVMFS volumes
+					pathsOfVolumes[volume.PersistentVolumeClaim.ClaimName] = "/mnt/cvmfs"
+				}
+
+			}
 		}
 
-		// define all containers, that is an object with two keys: 'initContainers' and 'containers'. The value of each key is an array of containers
 		allContainers := map[string][]v1.Container{
 			"initContainers": data.Pod.Spec.InitContainers,
 			"containers":     data.Pod.Spec.Containers,
 		}
-
-		// // if allContainers is greater than 0, create a network for the pod
-		// if len(allContainers) > 0 {
-		// 	// create a network for the pod
-		// 	shell := exec.ExecTask{
-		// 		Command: "docker",
-		// 		Args:    []string{"network", "create", podNamespace + "-" + podUID},
-		// 		Shell:   true,
-		// 	}
-		// 	shell.Execute()
-		// }
 
 		// iterate over all containers
 		for containerType, containers := range allContainers {
 			isInitContainer := containerType == "initContainers"
 
 			for _, container := range containers {
-
-				if isInitContainer {
-					log.G(h.Ctx).Info("-- Init Container: " + container.Name)
-				} else {
-					log.G(h.Ctx).Info("-- Regular Container: " + container.Name)
-				}
 
 				containerName := podNamespace + "-" + podUID + "-" + container.Name
 
@@ -105,12 +98,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 					numGpusRequested := val.Value()
 
-					log.G(h.Ctx).Infof("Number of GPU requested: %d", numGpusRequested)
-
 					// if the container is requesting 0 GPU, skip the GPU assignment
 					if numGpusRequested == 0 {
 						log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
-
 					} else {
 
 						log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
@@ -147,8 +137,6 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 					log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
 				}
 
-				log.G(h.Ctx).Info("-- Preparing environment variables for " + containerName)
-
 				var envVars string = ""
 				// add environment variables to the docker command
 				for _, envVar := range container.Env {
@@ -173,14 +161,20 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 							log.G(h.Ctx).Error("Volume " + volumeMount.Name + " not found in pathsOfVolumes")
 							continue
 						}
-
 						if volumeMount.ReadOnly {
 							envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath + ":ro"
 						} else {
-							envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath
+							// if it is Bidirectional, add :shared to the volume
+							if *volumeMount.MountPropagation == v1.MountPropagationBidirectional {
+								envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath + ":shared"
+							} else {
+								envVars += " -v " + pathsOfVolumes[volumeMount.Name] + ":" + volumeMount.MountPath
+							}
 						}
 					}
 				}
+
+				//docker run --privileged -v /home:/home -d --name demo1 docker:dind
 
 				log.G(h.Ctx).Info("- Creating container " + containerName)
 

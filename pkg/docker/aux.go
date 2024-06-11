@@ -58,42 +58,44 @@ func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.Int
 	}
 
 	if len(container.Command) > 0 {
-		if container.Command[0] == "/bin/bash" || container.Command[0] == "/bin/sh" {
-			fileName := prefileName + "_script.sh"
-			if len(container.Command) > 1 {
-				if strings.HasSuffix(container.Command[1], ".sh") {
-					return []string{}, container.Command, container.Args, nil
-				}
-				if container.Command[1] == "-c" {
-					// get the actual current path of the folder
-					fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
-					log.G(Ctx).Info("Creating file " + fileNamePath)
-					err = os.WriteFile(fileNamePath, []byte(container.Args[0]), 0644)
-					if err != nil {
-						log.G(Ctx).Error(err)
-						return nil, nil, nil, err
-					}
-					return []string{"-v " + fileNamePath + ":/" + fileName}, []string{container.Command[0] + " /" + fileName}, []string{}, nil
-				}
+
+		fileName := prefileName + "_script.sh"
+
+		if len(container.Args) == 0 {
+			fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
+			log.G(Ctx).Info("Creating file " + fileNamePath)
+			err = os.WriteFile(fileNamePath, []byte(strings.Join(container.Command, " ")), 0644)
+			if err != nil {
+				log.G(Ctx).Error(err)
+				return nil, nil, nil, err
 			}
-		} else if strings.HasPrefix(container.Command[0], "python") {
-			fileName := prefileName + "_script.py"
-			if container.Command[1] == "-c" {
-				fileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
-				log.G(Ctx).Info("Creating file " + fileNamePath)
-				err = os.WriteFile(fileNamePath, []byte(container.Args[0]), 0644)
-				if err != nil {
-					log.G(Ctx).Error(err)
-					return nil, nil, nil, err
-				}
-				return []string{"-v " + fileNamePath + ":/" + fileName}, []string{container.Command[0] + " /" + fileName}, []string{}, nil
-			}
-		} else {
-			return []string{}, container.Command, container.Args, nil
+			return []string{"-v " + fileNamePath + ":/" + fileName}, []string{"/bin/sh" + " /" + fileName}, []string{}, nil
 		}
 
+		argsFileName := container.Name + "_args"
+		argsFileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, argsFileName)
+		log.G(Ctx).Info("Creating file " + argsFileNamePath)
+		err = os.WriteFile(argsFileNamePath, []byte(strings.Join(container.Args, " ")), 0644)
+		if err != nil {
+			log.G(Ctx).Error(err)
+			return nil, nil, nil, err
+		}
+
+		fullFileContent := strings.Join(container.Command, " ") + " \"$(cat " + argsFileName + ")\""
+		fullFileNamePath := filepath.Join(wd, config.DataRootFolder+podNamespace+"-"+podUID, fileName)
+		log.G(Ctx).Info("Creating file " + fullFileNamePath)
+		err = os.WriteFile(fullFileNamePath, []byte(fullFileContent), 0644)
+		if err != nil {
+			log.G(Ctx).Error(err)
+			return nil, nil, nil, err
+		}
+
+		// mount also the args file
+		return []string{"-v " + argsFileNamePath + ":/" + argsFileName, "-v " + fullFileNamePath + ":/" + fileName}, []string{"/bin/sh" + " /" + fileName}, []string{}, nil
+
+	} else {
+		return []string{}, container.Command, container.Args, nil
 	}
-	return []string{}, container.Command, container.Args, nil
 }
 
 // prepareMounts iterates along the struct provided in the data parameter and checks for ConfigMaps, Secrets and EmptyDirs to be mounted.
@@ -353,16 +355,17 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 
 					emptyDirMountPath := ""
 					isReadOnly := false
-					//isBidirectional := false
+					isBidirectional := false
+
 					for _, mountSpec := range container.VolumeMounts {
 						if mountSpec.Name == vol.Name {
 							emptyDirMountPath = mountSpec.MountPath
 							if mountSpec.ReadOnly {
 								isReadOnly = true
 							}
-							// if mountSpec.MountPropagation != nil && *mountSpec.MountPropagation == v1.MountPropagationBidirectional {
-							// 	isBidirectional = true
-							// }
+							if mountSpec.MountPropagation != nil && *mountSpec.MountPropagation == v1.MountPropagationBidirectional {
+								isBidirectional = true
+							}
 							break
 						}
 					}
@@ -388,7 +391,11 @@ func mountData(Ctx context.Context, config commonIL.InterLinkConfig, pod v1.Pod,
 					if isReadOnly {
 						edPath += (":" + emptyDirMountPath + "/:ro")
 					} else {
-						edPath += (":" + emptyDirMountPath + "/")
+						if isBidirectional {
+							edPath += (":" + emptyDirMountPath + "/:shared")
+						} else {
+							edPath += (":" + emptyDirMountPath + "/")
+						}
 					}
 
 					return []string{edPath}, nil
