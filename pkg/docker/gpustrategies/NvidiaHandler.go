@@ -58,8 +58,6 @@ func (a *GPUManager) Init() error {
 // Discover implements the Discover function of the GPUManager interface
 func (a *GPUManager) Discover() error {
 
-	log.G(a.Ctx).Info("Discovering GPUs...")
-
 	count, ret := nvml.DeviceGetCount()
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("Unable to get device count: %v", nvml.ErrorString(ret))
@@ -92,20 +90,18 @@ func (a *GPUManager) Discover() error {
 
 	// print the GPUSpecsList if the length is greater than 0
 	if len(a.GPUSpecsList) > 0 {
-		log.G(a.Ctx).Info("Discovered GPUs:")
+		log.G(a.Ctx).Info("\u2705 Discovered GPUs:")
 		for _, gpuSpec := range a.GPUSpecsList {
-			log.G(a.Ctx).Info(fmt.Sprintf("Name: %s, UUID: %s, Type: %s, Available: %t, Index: %d", gpuSpec.Name, gpuSpec.UUID, gpuSpec.Type, gpuSpec.Available, gpuSpec.Index))
+			log.G(a.Ctx).Info(fmt.Sprintf("\u2705 Name: %s, UUID: %s, Type: %s, Available: %t, Index: %d", gpuSpec.Name, gpuSpec.UUID, gpuSpec.Type, gpuSpec.Available, gpuSpec.Index))
 		}
 	} else {
-		log.G(a.Ctx).Info("No GPUs discovered")
+		log.G(a.Ctx).Info(" \u2705 No GPUs discovered")
 	}
 
 	return nil
 }
 
 func (a *GPUManager) Check() error {
-
-	log.G(a.Ctx).Info("Checking the availability of GPUs...")
 
 	cli, err := client.NewEnvClient()
 	if err != nil {
@@ -148,9 +144,9 @@ func (a *GPUManager) Check() error {
 	// print the GPUSpecsList that are not available
 	for _, gpuSpec := range a.GPUSpecsList {
 		if !gpuSpec.Available {
-			log.G(a.Ctx).Info(fmt.Sprintf("GPU with UUID %s is not available. It is in use by container %s", gpuSpec.UUID, gpuSpec.ContainerID))
+			log.G(a.Ctx).Info(fmt.Sprintf("\u274C GPU with UUID %s is not available. It is in use by container %s", gpuSpec.UUID, gpuSpec.ContainerID))
 		} else {
-			log.G(a.Ctx).Info(fmt.Sprintf("GPU with UUID %s is available", gpuSpec.UUID))
+			log.G(a.Ctx).Info(fmt.Sprintf("\u2705 GPU with UUID %s is available", gpuSpec.UUID))
 		}
 	}
 
@@ -158,8 +154,6 @@ func (a *GPUManager) Check() error {
 }
 
 func (a *GPUManager) Shutdown() error {
-
-	log.G(a.Ctx).Info("Shutting down NVML...")
 
 	ret := nvml.Shutdown()
 	if ret != nvml.SUCCESS {
@@ -193,8 +187,6 @@ func (a *GPUManager) Assign(UUID string, containerID string) error {
 
 func (a *GPUManager) Release(containerID string) error {
 
-	log.G(a.Ctx).Info("Releasing GPU from container " + containerID)
-
 	a.GPUSpecsMutex.Lock()
 	defer a.GPUSpecsMutex.Unlock()
 
@@ -209,8 +201,6 @@ func (a *GPUManager) Release(containerID string) error {
 			a.GPUSpecsList[i].Available = true
 		}
 	}
-
-	log.G(a.Ctx).Info("Correctly released GPU from container " + containerID)
 
 	return nil
 }
@@ -251,8 +241,6 @@ func (a *GPUManager) GetAndAssignAvailableGPUs(numGPUs int, containerID string) 
 
 // dump the GPUSpecsList into a JSON file
 func (a *GPUManager) Dump() error {
-
-	log.G(a.Ctx).Info("Dumping the GPUSpecsList into a JSON file...")
 
 	// Convert the array to JSON format
 	jsonData, err := json.MarshalIndent(a.GPUSpecsList, "", "  ")
