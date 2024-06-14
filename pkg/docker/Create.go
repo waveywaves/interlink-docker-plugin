@@ -66,8 +66,8 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 
 		if volume.PersistentVolumeClaim != nil {
 			if _, ok := pathsOfVolumes[volume.PersistentVolumeClaim.ClaimName]; !ok {
-				// WIP: this is a temporary solution to mount CVMFS volumes
-				pathsOfVolumes[volume.PersistentVolumeClaim.ClaimName] = "/mnt/cvmfs"
+				// WIP: this is a temporary solution to mount CVMFS volumes for persistent volume claims case
+				pathsOfVolumes[volume.PersistentVolumeClaim.ClaimName] = "/cvmfs"
 			}
 
 		}
@@ -94,10 +94,10 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 
 				// if the container is requesting 0 GPU, skip the GPU assignment
 				if numGpusRequested == 0 {
-					log.G(h.Ctx).Info("Container " + containerName + " is not requesting a GPU")
+					log.G(h.Ctx).Info("\u2705 Container " + containerName + " is not requesting a GPU")
 				} else {
 
-					log.G(h.Ctx).Info("Container " + containerName + " is requesting " + val.String() + " GPU")
+					log.G(h.Ctx).Info("\u2705 Container " + containerName + " is requesting " + val.String() + " GPU")
 
 					isGpuRequested = true
 
@@ -327,6 +327,10 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		dindContainerArgs := []string{"run"}
 		dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
+		if _, err := os.Stat("/cvmfs"); err == nil {
+			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
+		}
+
 		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
 
 		var dindContainerID string

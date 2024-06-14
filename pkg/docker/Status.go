@@ -67,7 +67,6 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 
 			containerstatus := strings.Split(execReturn.Stdout, " ")
 
-			// TODO: why first container?
 			if execReturn.Stdout != "" {
 				log.G(h.Ctx).Info("\u2705 [STATUS CALL] The container " + container.Name + " is in the state: " + containerstatus[0])
 

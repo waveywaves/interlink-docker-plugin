@@ -127,7 +127,6 @@ func prepareMounts(Ctx context.Context, config commonIL.InterLinkConfig, data co
 		}
 
 		for _, emptyDir := range cont.EmptyDirs {
-			log.G(Ctx).Info("-- EmptyDir to handle " + emptyDir)
 			if containerName == podNamespace+"-"+podUID+"-"+cont.Name {
 				paths, err := mountData(Ctx, config, data.Pod, emptyDir, container)
 				if err != nil {
