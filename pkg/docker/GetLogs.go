@@ -16,15 +16,10 @@ import (
 
 // GetLogsHandler performs a Docker logs command and returns its manipulated output
 func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
-	log.G(h.Ctx).Info("Docker Sidecar: received GetLogs call")
+	log.G(h.Ctx).Info("\u23F3 [LOGS CALL]: received get logs call")
 	var req commonIL.LogStruct
 	statusCode := http.StatusOK
 	currentTime := time.Now()
-
-	//orario, _ := time.Parse("2006-01-02T15:04:05.999999999Z", "2023-09-14T10:35:44.665672258Z")
-	//test := commonIL.LogStruct{PodName: "test-pod", ContainerName: "busyecho", Opts: commonIL.ContainerLogOpts{Tail: 0, LimitBytes: 350, SinceTime: orario, Timestamps: true}}
-	//testBytes, _ := json.Marshal(test)
-	//log.G(h.Ctx).Debug(string(testBytes))
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -49,10 +44,7 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 
 	containerName := podNamespace + "-" + podUID + "-" + req.ContainerName
 
-	//var cmd *OSexec.Cmd
-	// here check if the container exists, if not returm empty logs, exec docker ps and check if the container is listed in the output, if not return 
-	// http.StatusOk and empty logs
-	cmd := OSexec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
+	cmd := OSexec.Command("docker", "exec", podUID+"_dind", "docker", "ps", "-a", "--format", "{{.Names}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.G(h.Ctx).Error(err)
@@ -74,13 +66,12 @@ func (h *SidecarHandler) GetLogsHandler(w http.ResponseWriter, r *http.Request) 
 		w.Write([]byte("No logs available for container " + containerName + ". Container not found."))
 		return
 	}
-	
 
 	//var cmd *OSexec.Cmd
 	if req.Opts.Timestamps {
-		cmd = OSexec.Command("docker", "logs", "-t", containerName)
+		cmd = OSexec.Command("docker", "exec", podUID+"_dind", "docker", "logs", "-t", containerName)
 	} else {
-		cmd = OSexec.Command("docker", "logs", containerName)
+		cmd = OSexec.Command("docker", "exec", podUID+"_dind", "docker", "logs", containerName)
 	}
 
 	output, err = cmd.CombinedOutput()

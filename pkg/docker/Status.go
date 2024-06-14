@@ -16,7 +16,7 @@ import (
 
 // StatusHandler checks Docker Container's status by running docker ps -af command and returns that status
 func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
-	log.G(h.Ctx).Info("Docker Sidecar: received GetStatus call")
+	log.G(h.Ctx).Info("\u23F3 [STATUS CALL] received get status call")
 	var resp []commonIL.PodStatus
 	var req []*v1.Pod
 	statusCode := http.StatusOK
@@ -47,9 +47,7 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace})
 		for _, container := range pod.Spec.Containers {
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
-
-			log.G(h.Ctx).Debug("- Getting status for container " + containerName)
-			cmd := []string{"ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
+			cmd := []string{"exec " + podUID + "_dind" + " docker ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
 
 			shell := exec.ExecTask{
 				Command: "docker",
@@ -65,30 +63,28 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
+			log.G(h.Ctx).Info("\u2705 [STATUS CALL] Status of the container retrieved successfully")
+
 			containerstatus := strings.Split(execReturn.Stdout, " ")
 
-			// TODO: why first container?
 			if execReturn.Stdout != "" {
+				log.G(h.Ctx).Info("\u2705 [STATUS CALL] The container " + container.Name + " is in the state: " + containerstatus[0])
+
 				if containerstatus[0] == "Created" {
-					log.G(h.Ctx).Info("-- Container " + containerName + " is going ready...")
 					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 				} else if containerstatus[0] == "Up" {
-					log.G(h.Ctx).Info("-- Container " + containerName + " is running")
 					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Running: &v1.ContainerStateRunning{}}, Ready: true})
 				} else if containerstatus[0] == "Exited" {
-					log.G(h.Ctx).Info("-- Container " + containerName + " has been stopped")
 					containerExitCode := strings.Split(containerstatus[1], "(")
 					exitCode, err := strconv.Atoi(strings.Trim(containerExitCode[1], ")"))
 					if err != nil {
 						log.G(h.Ctx).Error(err)
 						exitCode = 0
 					}
-					log.G(h.Ctx).Info("-- Container exit code is: " + strconv.Itoa(exitCode))
 					resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{ExitCode: int32(exitCode)}}, Ready: false})
 				}
 			} else {
-				log.G(h.Ctx).Info("-- Container " + containerName + " doesn't exist")
-				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{}}, Ready: false})
+				resp[i].Containers = append(resp[i].Containers, v1.ContainerStatus{Name: container.Name, State: v1.ContainerState{Waiting: &v1.ContainerStateWaiting{}}, Ready: false})
 			}
 		}
 	}

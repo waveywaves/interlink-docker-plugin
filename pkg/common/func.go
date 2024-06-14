@@ -50,10 +50,10 @@ func NewInterLinkConfig() (InterLinkConfig, error) {
 			return InterLinkConfig{}, err
 		}
 
-		log.G(context.Background()).Info("Loading InterLink config from " + path)
+		log.G(context.Background()).Info("\u2705 Loading InterLink config from " + path)
 		yfile, err := os.ReadFile(path)
 		if err != nil {
-			log.G(context.Background()).Error("Error opening config file, exiting...")
+			log.G(context.Background()).Error("\u274C Error opening config file, exiting...")
 			return InterLinkConfig{}, err
 		}
 		yaml.Unmarshal(yfile, &InterLinkConfigInst)
