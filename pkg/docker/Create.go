@@ -235,7 +235,16 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		podUID := string(data.Pod.UID)
 		podNamespace := string(data.Pod.Namespace)
 
-		podDirectoryPath := filepath.Join(wd, h.Config.DataRootFolder+podNamespace+"-"+podUID)
+		podDirectoryPath := filepath.Join(wd, h.Config.DataRootFolder+"/"+podNamespace+"-"+podUID)
+
+		// if the podDirectoryPath does not exist, create it
+		if _, err := os.Stat(podDirectoryPath); os.IsNotExist(err) {
+			err = os.MkdirAll(podDirectoryPath, os.ModePerm)
+			if err != nil {
+				HandleErrorAndRemoveData(h, w, "An error occurred during the creation of the pod directory", err, "", "")
+				return
+			}
+		}
 
 		// call prepareDockerRuns to get the DockerRunStruct array
 		dockerRunStructs, err := h.prepareDockerRuns(data, w)
@@ -282,7 +291,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
 		}
 
-		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
+		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
 
 		var dindContainerID string
 		shell := exec.ExecTask{

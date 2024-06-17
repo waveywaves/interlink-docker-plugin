@@ -10,6 +10,8 @@ import (
 	exec "github.com/alexellis/go-execute/pkg/v1"
 	"github.com/containerd/containerd/log"
 	v1 "k8s.io/api/core/v1"
+
+	"path/filepath"
 )
 
 // DeleteHandler stops and deletes Docker containers from provided data
@@ -108,7 +110,18 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 			log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted container " + podUID + "_dind")
 		}
 
-		os.RemoveAll(h.Config.DataRootFolder + pod.Namespace + "-" + string(pod.UID))
+		// check if the container has GPU devices attacched using the GpuManager and release them
+		wd, err := os.Getwd()
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "Unable to get current working directory", err, "", "")
+			return
+		}
+		podDirectoryPathToDelete := filepath.Join(wd, h.Config.DataRootFolder+"/"+podNamespace+"-"+podUID)
+		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleting directory " + podDirectoryPathToDelete)
+
+		err = os.RemoveAll(podDirectoryPathToDelete)
+
+		//os.RemoveAll(h.Config.DataRootFolder + pod.Namespace + "-" + string(pod.UID))
 	}
 
 	w.WriteHeader(statusCode)
