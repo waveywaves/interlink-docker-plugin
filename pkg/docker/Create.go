@@ -285,16 +285,30 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			dindImage = "docker:dind"
 		}
 
+		// create a dedicated docker network for the dind container
+		shell := exec.ExecTask{
+			Command: "docker",
+			Args:    []string{"network", "create", "--driver", "bridge", string(data.Pod.UID) + "_dind_network"},
+			Shell:   true,
+		}
+		execReturn, err = shell.Execute()
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "An error occurred during the creation of the network for the DIND container", err, "", "")
+			return
+		}
+
 		dindContainerArgs := []string{"run"}
 		dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
 		if _, err := os.Stat("/cvmfs"); err == nil {
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
 		}
 
+		// add the network to the dind container
+		dindContainerArgs = append(dindContainerArgs, "--network", string(data.Pod.UID)+"_dind_network")
 		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
 
 		var dindContainerID string
-		shell := exec.ExecTask{
+		shell = exec.ExecTask{
 			Command: "docker",
 			Args:    dindContainerArgs,
 			Shell:   true,

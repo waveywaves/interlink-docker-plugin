@@ -110,7 +110,21 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 			log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted container " + podUID + "_dind")
 		}
 
-		// check if the container has GPU devices attacched using the GpuManager and release them
+		// delete also the network of the docker dind container that is called string(data.Pod.UID) + "_dind_network"
+		cmd = []string{"network", "rm", podUID + "_dind_network"}
+		shell = exec.ExecTask{
+			Command: "docker",
+			Args:    cmd,
+			Shell:   true,
+		}
+		execReturn, _ = shell.Execute()
+		execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		if execReturn.Stderr != "" {
+			log.G(h.Ctx).Error("\u274C [DELETE CALL] Error deleting network " + podUID + "_dind_network")
+		} else {
+			log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted network " + podUID + "_dind_network")
+		}
+
 		wd, err := os.Getwd()
 		if err != nil {
 			HandleErrorAndRemoveData(h, w, "Unable to get current working directory", err, "", "")
