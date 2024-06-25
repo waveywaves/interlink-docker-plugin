@@ -21,13 +21,6 @@ import (
 	"path/filepath"
 )
 
-type DockerRunStruct struct {
-	Name            string `json:"name"`
-	Command         string `json:"command"`
-	IsInitContainer bool   `json:"isInitContainer"`
-	GpuArgs         string `json:"gpuArgs"`
-}
-
 func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w http.ResponseWriter) ([]DockerRunStruct, error) {
 
 	var dockerRunStructs []DockerRunStruct
@@ -490,12 +483,20 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.G(h.Ctx).Info("\u2705 [POD FLOW] Containers created successfully")
 
+		createResponse := CreateStruct{PodUID: string(data.Pod.UID), PodJID: dindContainerID}
+		createResponseBytes, err := json.Marshal(createResponse)
+		if err != nil {
+			statusCode = http.StatusInternalServerError
+			HandleErrorAndRemoveData(h, w, "An error occurred during the json marshal of the returned JID", err, "", "")
+			return
+		}
+
 		w.WriteHeader(statusCode)
 
 		if statusCode != http.StatusOK {
 			w.Write([]byte("Some errors occurred while creating containers. Check Docker Sidecar's logs"))
 		} else {
-			w.Write([]byte("Containers created"))
+			w.Write(createResponseBytes)
 		}
 	}
 

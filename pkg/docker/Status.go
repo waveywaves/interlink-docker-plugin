@@ -44,8 +44,27 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		podUID := string(pod.UID)
 		podNamespace := string(pod.Namespace)
 
-		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace})
+		// send a docker command to retrieve the uuid of the dind container
+		// the command to exec is: docker inspect --format '{{.Id}}' podUID + "_dind"
+		cmd := []string{"inspect", "--format", "{{.Id}}", podUID + "_dind"}
+		shell := exec.ExecTask{
+			Command: "docker",
+			Args:    cmd,
+			Shell:   true,
+		}
+		execReturn, err := shell.Execute()
+		if err != nil {
+			log.G(h.Ctx).Error(err)
+			statusCode = http.StatusInternalServerError
+			break
+		}
+
+		dindUUID := strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		log.G(h.Ctx).Info("\u2705 [STATUS CALL] UUID of the dind container retrieved successfully: ", dindUUID)
+
+		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace, JobID: dindUUID})
 		for _, container := range pod.Spec.Containers {
+
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
 			cmd := []string{"exec " + podUID + "_dind" + " docker ps -af name=^" + containerName + "$ --format \"{{.Status}}\""}
 
