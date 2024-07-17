@@ -317,7 +317,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container created successfully with ID: " + dindContainerID)
 
 		// create a variable of maximum number of retries
-		maxRetries := 10
+		maxRetries := 20
 
 		// wait until the dind container is up and running by check that the command docker ps inside of it does not return an error
 		for {
@@ -337,7 +337,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(string(output), "API listen on /var/run/docker.sock") {
 				break
 			} else {
-				time.Sleep(1 * time.Second)
+				time.Sleep(60 * time.Second)
 			}
 
 			maxRetries -= 1
