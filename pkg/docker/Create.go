@@ -333,11 +333,14 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			Args:    []string{"network", "create", "--driver", "bridge", string(data.Pod.UID) + "_dind_network"},
 			Shell:   true,
 		}
-		execReturn, err = shell.Execute()
+		execReturnNetworkCommand, err := shell.Execute()
 		if err != nil {
 			HandleErrorAndRemoveData(h, w, "An error occurred during the creation of the network for the DIND container", err, "", "")
 			return
 		}
+
+		// log the docker network creation command
+		log.G(h.Ctx).Info("\u2705 [POD FLOW] Docker network created successfully with command: " + "docker " + strings.Join(shell.Args, " "))
 
 		dindContainerArgs := []string{"run"}
 		dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
@@ -363,21 +366,25 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		dindContainerID = execReturn.Stdout
 
+		// log also the command executed to create the DIND container
+		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container command executed successfully: " + "docker " + strings.Join(shell.Args, " "))
+
 		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container created successfully with ID: " + dindContainerID)
 
 		// create a variable of maximum number of retries
-		maxRetries := 10
+		maxRetries := 20
+		output := []byte{}
 
 		// wait until the dind container is up and running by check that the command docker ps inside of it does not return an error
 		for {
 
 			if maxRetries == 0 {
-				HandleErrorAndRemoveData(h, w, "The number of attempts to check if the DIND container is running is 0. This means that an error occurred during the creation of the DIND container", err, "", "")
+				HandleErrorAndRemoveData(h, w, "The number of attempts to check if the DIND container is running is 0. This means that an error occurred during the creation of the DIND container UID. "+dindContainerID+" output: "+string(output)+" Network creation output "+string(execReturnNetworkCommand.Stdout), err, "", "")
 				return
 			}
 
 			cmd := OSexec.Command("docker", "logs", string(data.Pod.UID)+"_dind")
-			output, err := cmd.CombinedOutput()
+			output, err = cmd.CombinedOutput()
 
 			if err != nil {
 				time.Sleep(1 * time.Second)

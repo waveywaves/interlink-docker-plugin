@@ -59,8 +59,18 @@ func (h *SidecarHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		dindUUID := strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		//dindUUID := strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		dindUUID := strings.Join(strings.Fields(execReturn.Stdout), "")
 		log.G(h.Ctx).Info("\u2705 [STATUS CALL] UUID of the dind container retrieved successfully: ", dindUUID)
+
+		// if the string is empty or the length of the string is 0, return an error and 404 status code\
+		if len(dindUUID) == 0 || dindUUID == "" {
+			log.G(h.Ctx).Error("\u274C [STATUS CALL] Error retrieving UUID of the dind container")
+			statusCode = http.StatusNotFound
+			w.WriteHeader(statusCode)
+			w.Write([]byte("DIND container with UUID " + dindUUID + " not found. Maybe it was deleted or never existed."))
+			return
+		}
 
 		resp = append(resp, commonIL.PodStatus{PodName: pod.Name, PodUID: podUID, PodNamespace: podNamespace, JobID: dindUUID})
 		for _, container := range pod.Spec.Containers {
