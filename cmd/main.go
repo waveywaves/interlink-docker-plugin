@@ -10,6 +10,7 @@ import (
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 	docker "github.com/intertwin-eu/interlink-docker-plugin/pkg/docker"
+	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/dindhandler"
 	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/gpustrategies"
 )
 
@@ -53,6 +54,14 @@ func main() {
 	if err != nil {
 		log.G(Ctx).Fatal(err)
 	}
+
+	var dindHandler dindhandler.DindManager
+	dindHandler = dindhandler.DindManager{
+		DindList: []dindhandler.DindSpecs{},
+		Ctx:      Ctx,
+	}
+
+	dindHandler.Init(3)
 
 	SidecarAPIs := docker.SidecarHandler{
 		Config:     interLinkConfig,
