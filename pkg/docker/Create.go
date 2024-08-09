@@ -17,7 +17,6 @@ import (
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 
-	OSexec "os/exec"
 	"path/filepath"
 )
 
@@ -247,7 +246,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.G(h.Ctx).Info("\u23F3 [CREATE CALL] Received create call from InterLink ")
 
-	var execReturn exec.ExecResult
+	//var execReturn exec.ExecResult
 	statusCode := http.StatusOK
 
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -300,7 +299,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		// from dockerRunStructs, create two arrays: one for initContainers and one for containers
 		var initContainers []DockerRunStruct
 		var containers []DockerRunStruct
-		var gpuArgs string
+		//var gpuArgs string
 
 		for _, dockerRunStruct := range dockerRunStructs {
 			if dockerRunStruct.IsInitContainer {
@@ -310,97 +309,134 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// check if between the containers there is a container that requires a GPU
-		for _, container := range containers {
-			if container.GpuArgs != "" {
-				gpuArgs = container.GpuArgs
-			}
+		// // check if between the containers there is a container that requires a GPU
+		// for _, container := range containers {
+		// 	if container.GpuArgs != "" {
+		// 		gpuArgs = container.GpuArgs
+		// 	}
+		// }
+
+		// gpuArgsAsArray := []string{}
+		// if gpuArgs != "" {
+		// 	gpuArgsAsArray = strings.Split(gpuArgs, " ")
+		// }
+
+		// dindImage := "ghcr.io/extrality/nvidia-dind"
+		// if gpuArgs == "" {
+		// 	dindImage = "docker:dind"
+		// }
+
+		// // create a dedicated docker network for the dind container
+		// shell := exec.ExecTask{
+		// 	Command: "docker",
+		// 	Args:    []string{"network", "create", "--driver", "bridge", string(data.Pod.UID) + "_dind_network"},
+		// 	Shell:   true,
+		// }
+		// execReturnNetworkCommand, err := shell.Execute()
+		// if err != nil {
+		// 	HandleErrorAndRemoveData(h, w, "An error occurred during the creation of the network for the DIND container", err, "", "")
+		// 	return
+		// }
+
+		// // log the docker network creation command
+		// log.G(h.Ctx).Info("\u2705 [POD FLOW] Docker network created successfully with command: " + "docker " + strings.Join(shell.Args, " "))
+
+		// dindContainerArgs := []string{"run"}
+		// dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
+		// if _, err := os.Stat("/cvmfs"); err == nil {
+		// 	dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
+		// }
+
+		// // add the network to the dind container
+		// dindContainerArgs = append(dindContainerArgs, "--network", string(data.Pod.UID)+"_dind_network")
+		// dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
+
+		// var dindContainerID string
+		// shell = exec.ExecTask{
+		// 	Command: "docker",
+		// 	Args:    dindContainerArgs,
+		// 	Shell:   true,
+		// }
+
+		// execReturn, err = shell.Execute()
+		// if err != nil {
+		// 	HandleErrorAndRemoveData(h, w, "An error occurred during the execution of DIND container command", err, "", "")
+		// 	return
+		// }
+		// dindContainerID = execReturn.Stdout
+
+		// // log also the command executed to create the DIND container
+		// log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container command executed successfully: " + "docker " + strings.Join(shell.Args, " "))
+
+		// log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container created successfully with ID: " + dindContainerID)
+
+		// // create a variable of maximum number of retries
+		// maxRetries := 20
+		// output := []byte{}
+
+		// // wait until the dind container is up and running by check that the command docker ps inside of it does not return an error
+		// for {
+
+		// 	if maxRetries == 0 {
+		// 		HandleErrorAndRemoveData(h, w, "The number of attempts to check if the DIND container is running is 0. This means that an error occurred during the creation of the DIND container UID. "+dindContainerID+" output: "+string(output)+" Network creation output "+string(execReturnNetworkCommand.Stdout), err, "", "")
+		// 		return
+		// 	}
+
+		// 	cmd := OSexec.Command("docker", "logs", string(data.Pod.UID)+"_dind")
+		// 	output, err = cmd.CombinedOutput()
+
+		// 	if err != nil {
+		// 		time.Sleep(1 * time.Second)
+		// 	}
+
+		// 	if strings.Contains(string(output), "API listen on /var/run/docker.sock") {
+		// 		break
+		// 	} else {
+		// 		time.Sleep(1 * time.Second)
+		// 	}
+
+		// 	maxRetries -= 1
+
+		// }
+
+		// log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container is up and running, ready to create the containers inside of it")
+
+		// get a dind container ID from dind manager of the sidecard handler
+		dindContainerID, err := h.DindManager.GetAvailableDind()
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "An error occurred during the request of get available DIND container", err, "", "")
+			return
 		}
 
-		gpuArgsAsArray := []string{}
-		if gpuArgs != "" {
-			gpuArgsAsArray = strings.Split(gpuArgs, " ")
+		// remove the dind container from the list of available dind containers
+		err = h.DindManager.SetDindUnavailable(dindContainerID)
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "An error occurred during the removal of the DIND container from the list of available DIND containers", err, "", "")
+			return
 		}
 
-		dindImage := "ghcr.io/extrality/nvidia-dind"
-		if gpuArgs == "" {
-			dindImage = "docker:dind"
+		// set the podUID to the dind container
+		err = h.DindManager.SetPodUIDToDind(dindContainerID, podUID)
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "An error occurred during the setting of the pod UID to the DIND container", err, "", "")
+			return
 		}
 
-		// create a dedicated docker network for the dind container
+		// create a new dind container in background
+		go h.DindManager.BuildDindContainers(1)
+
+		// run the docker command to rename the container to the pod UID
 		shell := exec.ExecTask{
 			Command: "docker",
-			Args:    []string{"network", "create", "--driver", "bridge", string(data.Pod.UID) + "_dind_network"},
-			Shell:   true,
-		}
-		execReturnNetworkCommand, err := shell.Execute()
-		if err != nil {
-			HandleErrorAndRemoveData(h, w, "An error occurred during the creation of the network for the DIND container", err, "", "")
-			return
-		}
-
-		// log the docker network creation command
-		log.G(h.Ctx).Info("\u2705 [POD FLOW] Docker network created successfully with command: " + "docker " + strings.Join(shell.Args, " "))
-
-		dindContainerArgs := []string{"run"}
-		dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
-		if _, err := os.Stat("/cvmfs"); err == nil {
-			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
-		}
-
-		// add the network to the dind container
-		dindContainerArgs = append(dindContainerArgs, "--network", string(data.Pod.UID)+"_dind_network")
-		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", string(data.Pod.UID)+"_dind", dindImage)
-
-		var dindContainerID string
-		shell = exec.ExecTask{
-			Command: "docker",
-			Args:    dindContainerArgs,
+			Args:    []string{"rename", dindContainerID, string(data.Pod.UID) + "_dind"},
 			Shell:   true,
 		}
 
-		execReturn, err = shell.Execute()
+		_, err = shell.Execute()
 		if err != nil {
-			HandleErrorAndRemoveData(h, w, "An error occurred during the execution of DIND container command", err, "", "")
+			HandleErrorAndRemoveData(h, w, "An error occurred during the rename of the DIND container", err, "", "")
 			return
 		}
-		dindContainerID = execReturn.Stdout
-
-		// log also the command executed to create the DIND container
-		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container command executed successfully: " + "docker " + strings.Join(shell.Args, " "))
-
-		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container created successfully with ID: " + dindContainerID)
-
-		// create a variable of maximum number of retries
-		maxRetries := 20
-		output := []byte{}
-
-		// wait until the dind container is up and running by check that the command docker ps inside of it does not return an error
-		for {
-
-			if maxRetries == 0 {
-				HandleErrorAndRemoveData(h, w, "The number of attempts to check if the DIND container is running is 0. This means that an error occurred during the creation of the DIND container UID. "+dindContainerID+" output: "+string(output)+" Network creation output "+string(execReturnNetworkCommand.Stdout), err, "", "")
-				return
-			}
-
-			cmd := OSexec.Command("docker", "logs", string(data.Pod.UID)+"_dind")
-			output, err = cmd.CombinedOutput()
-
-			if err != nil {
-				time.Sleep(1 * time.Second)
-			}
-
-			if strings.Contains(string(output), "API listen on /var/run/docker.sock") {
-				break
-			} else {
-				time.Sleep(1 * time.Second)
-			}
-
-			maxRetries -= 1
-
-		}
-
-		log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container is up and running, ready to create the containers inside of it")
 
 		if len(initContainers) > 0 {
 
@@ -416,7 +452,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			shell = exec.ExecTask{
+			shell := exec.ExecTask{
 				Command: "docker",
 				Args:    []string{"exec", string(data.Pod.UID) + "_dind", "/bin/sh", podDirectoryPath + "/init_containers_command.sh"},
 			}
@@ -482,7 +518,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			Args:    []string{"exec", string(data.Pod.UID) + "_dind", "/bin/sh", podDirectoryPath + "/containers_command.sh"},
 		}
 
-		execReturn, err = shell.Execute()
+		_, err = shell.Execute()
 		if err != nil {
 			HandleErrorAndRemoveData(h, w, "An error occurred during the execution of the container command script", err, "", "")
 			return

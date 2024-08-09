@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -10,6 +11,7 @@ import (
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 	docker "github.com/intertwin-eu/interlink-docker-plugin/pkg/docker"
+	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/dindmanager"
 	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/gpustrategies"
 )
 
@@ -54,18 +56,26 @@ func main() {
 		log.G(Ctx).Fatal(err)
 	}
 
-	// var dindHandler dindManager.DindManagerInterface
-	// dindHandler = &dindManager.DindManager{
-	// 	DindList: []dindManager.DindSpecs{},
-	// 	Ctx:      Ctx,
-	// }
-
-	//dindHandler.Init(3)
+	availableDinds := os.Getenv("AVAILABLEDINDS")
+	if availableDinds == "" {
+		availableDinds = "2"
+	}
+	var dindHandler dindmanager.DindManagerInterface
+	dindHandler = &dindmanager.DindManager{
+		DindList: []dindmanager.DindSpecs{},
+		Ctx:      Ctx,
+	}
+	availableDindsInt, err := strconv.ParseInt(availableDinds, 10, 8)
+	if err != nil {
+		log.G(Ctx).Fatal(err)
+	}
+	dindHandler.BuildDindContainers(int8(availableDindsInt))
 
 	SidecarAPIs := docker.SidecarHandler{
-		Config:     interLinkConfig,
-		Ctx:        Ctx,
-		GpuManager: gpuManager,
+		Config:      interLinkConfig,
+		Ctx:         Ctx,
+		GpuManager:  gpuManager,
+		DindManager: dindHandler,
 	}
 
 	mutex := http.NewServeMux()

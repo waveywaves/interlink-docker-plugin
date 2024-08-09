@@ -9,6 +9,7 @@ import (
 
 	exec "github.com/alexellis/go-execute/pkg/v1"
 	"github.com/containerd/containerd/log"
+	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/dindmanager"
 	v1 "k8s.io/api/core/v1"
 
 	"path/filepath"
@@ -66,7 +67,16 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// delete also the network of the docker dind container that is called string(data.Pod.UID) + "_dind_network"
-	cmd = []string{"network", "rm", podUID + "_dind_network"}
+
+	// retrieve the network ID from the dind manager
+
+	dindSpec := dindmanager.DindSpecs{}
+	dindSpec, err = h.DindManager.GetDindFromPodUID(podUID)
+
+	// log the retrieved dindSpec
+	log.G(h.Ctx).Info("\u2705 [DELETE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
+
+	cmd = []string{"network", "rm", dindSpec.DindNetworkID}
 	shell = exec.ExecTask{
 		Command: "docker",
 		Args:    cmd,
@@ -75,9 +85,9 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	execReturn, _ = shell.Execute()
 	execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
 	if execReturn.Stderr != "" {
-		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error deleting network " + podUID + "_dind_network")
+		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error deleting network " + dindSpec.DindNetworkID)
 	} else {
-		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted network " + podUID + "_dind_network")
+		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted network " + dindSpec.DindNetworkID)
 	}
 
 	wd, err := os.Getwd()
@@ -89,6 +99,12 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleting directory " + podDirectoryPathToDelete)
 
 	err = os.RemoveAll(podDirectoryPathToDelete)
+
+	// set the dind available again
+	err = h.DindManager.RemoveDindFromList(dindSpec.PodUID)
+	if err != nil {
+		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error setting DIND container available")
+	}
 
 	w.WriteHeader(statusCode)
 	if statusCode != http.StatusOK {
