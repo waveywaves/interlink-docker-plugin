@@ -246,6 +246,30 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.G(h.Ctx).Info("\u23F3 [CREATE CALL] Received create call from InterLink ")
 
+	// get a dind container ID from dind manager of the sidecard handler
+	dindContainerID, err := h.DindManager.GetAvailableDind()
+	if err != nil {
+
+		log.G(h.Ctx).Info("\u2705 [POD FLOW] No available DIND container found, creating a new one")
+
+		h.DindManager.BuildDindContainers(1)
+		dindContainerID, err = h.DindManager.GetAvailableDind()
+		if err != nil {
+			HandleErrorAndRemoveData(h, w, "During creation of new DIND container, an error occurred during the request of get available DIND container", err, "", "")
+			return
+		}
+	}
+
+	// remove the dind container from the list of available dind containers
+	err = h.DindManager.SetDindUnavailable(dindContainerID)
+	if err != nil {
+		HandleErrorAndRemoveData(h, w, "An error occurred during the removal of the DIND container from the list of available DIND containers", err, "", "")
+		return
+	}
+
+	// create a new dind container in background
+	go h.DindManager.BuildDindContainers(1)
+
 	//var execReturn exec.ExecResult
 	statusCode := http.StatusOK
 
@@ -401,29 +425,12 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 		// log.G(h.Ctx).Info("\u2705 [POD FLOW] DIND container is up and running, ready to create the containers inside of it")
 
-		// get a dind container ID from dind manager of the sidecard handler
-		dindContainerID, err := h.DindManager.GetAvailableDind()
-		if err != nil {
-			HandleErrorAndRemoveData(h, w, "An error occurred during the request of get available DIND container", err, "", "")
-			return
-		}
-
-		// remove the dind container from the list of available dind containers
-		err = h.DindManager.SetDindUnavailable(dindContainerID)
-		if err != nil {
-			HandleErrorAndRemoveData(h, w, "An error occurred during the removal of the DIND container from the list of available DIND containers", err, "", "")
-			return
-		}
-
 		// set the podUID to the dind container
 		err = h.DindManager.SetPodUIDToDind(dindContainerID, podUID)
 		if err != nil {
 			HandleErrorAndRemoveData(h, w, "An error occurred during the setting of the pod UID to the DIND container", err, "", "")
 			return
 		}
-
-		// create a new dind container in background
-		go h.DindManager.BuildDindContainers(1)
 
 		// run the docker command to rename the container to the pod UID
 		shell := exec.ExecTask{

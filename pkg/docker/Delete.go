@@ -66,30 +66,36 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted container " + podUID + "_dind")
 	}
 
-	// delete also the network of the docker dind container that is called string(data.Pod.UID) + "_dind_network"
-
-	// retrieve the network ID from the dind manager
-
 	dindSpec := dindmanager.DindSpecs{}
 	dindSpec, err = h.DindManager.GetDindFromPodUID(podUID)
 
-	// log the retrieved dindSpec
-	log.G(h.Ctx).Info("\u2705 [DELETE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
-
-	cmd = []string{"network", "rm", dindSpec.DindNetworkID}
-	shell = exec.ExecTask{
-		Command: "docker",
-		Args:    cmd,
-		Shell:   true,
-	}
-	execReturn, _ = shell.Execute()
-	execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
-	if execReturn.Stderr != "" {
-		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error deleting network " + dindSpec.DindNetworkID)
+	if err != nil {
+		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error retrieving DindSpecs, maybe the Dind container has already been deleted")
 	} else {
-		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted network " + dindSpec.DindNetworkID)
-	}
+		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
 
+		// log the retrieved dindSpec
+		log.G(h.Ctx).Info("\u2705 [DELETE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
+
+		cmd = []string{"network", "rm", dindSpec.DindNetworkID}
+		shell = exec.ExecTask{
+			Command: "docker",
+			Args:    cmd,
+			Shell:   true,
+		}
+		execReturn, _ = shell.Execute()
+		execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		if execReturn.Stderr != "" {
+			log.G(h.Ctx).Error("\u274C [DELETE CALL] Error deleting network " + dindSpec.DindNetworkID)
+		} else {
+			log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleted network " + dindSpec.DindNetworkID)
+		}
+		// set the dind available again
+		err = h.DindManager.RemoveDindFromList(dindSpec.PodUID)
+		if err != nil {
+			log.G(h.Ctx).Error("\u274C [DELETE CALL] Error setting DIND container available")
+		}
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		HandleErrorAndRemoveData(h, w, "Unable to get current working directory", err, "", "")
@@ -99,12 +105,6 @@ func (h *SidecarHandler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	log.G(h.Ctx).Info("\u2705 [DELETE CALL] Deleting directory " + podDirectoryPathToDelete)
 
 	err = os.RemoveAll(podDirectoryPathToDelete)
-
-	// set the dind available again
-	err = h.DindManager.RemoveDindFromList(dindSpec.PodUID)
-	if err != nil {
-		log.G(h.Ctx).Error("\u274C [DELETE CALL] Error setting DIND container available")
-	}
 
 	w.WriteHeader(statusCode)
 	if statusCode != http.StatusOK {
