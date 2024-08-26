@@ -246,6 +246,9 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.G(h.Ctx).Info("\u23F3 [CREATE CALL] Received create call from InterLink ")
 
+	// create bool variable to set if a new dind container has to be created
+	newDindContainerCreated := false
+
 	// get a dind container ID from dind manager of the sidecard handler
 	dindContainerID, err := h.DindManager.GetAvailableDind()
 	if err != nil {
@@ -258,6 +261,7 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 			HandleErrorAndRemoveData(h, w, "During creation of new DIND container, an error occurred during the request of get available DIND container", err, "", "")
 			return
 		}
+		newDindContainerCreated = true
 	}
 
 	// remove the dind container from the list of available dind containers
@@ -267,8 +271,10 @@ func (h *SidecarHandler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// create a new dind container in background
-	go h.DindManager.BuildDindContainers(1)
+	if !newDindContainerCreated {
+		// create a new dind container in background
+		go h.DindManager.BuildDindContainers(1)
+	}
 
 	//var execReturn exec.ExecResult
 	statusCode := http.StatusOK

@@ -100,7 +100,12 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 
 		// add the network to the dind container
 		dindContainerArgs = append(dindContainerArgs, "--network", randUID+"_dind_network")
-		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "--runtime=nvidia", "-d", "--name", randUID+"_dind", dindImage)
+		// "--runtime=nvidia" is added to the dind container if the GPUENABLED env variable is set to 1
+
+		if gpuEnabled == "1" {
+			dindContainerArgs = append(dindContainerArgs, "--runtime=nvidia")
+		}
+		dindContainerArgs = append(dindContainerArgs, "--privileged", "-v", wd+":/"+wd, "-v", "/home:/home", "-v", "/var/lib/docker/overlay2:/var/lib/docker/overlay2", "-v", "/var/lib/docker/image:/var/lib/docker/image", "-d", "--name", randUID+"_dind", dindImage)
 
 		var dindContainerID string
 		shell = exec.ExecTask{
