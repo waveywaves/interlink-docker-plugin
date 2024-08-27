@@ -15,6 +15,7 @@ import (
 )
 
 type DindManagerInterface interface {
+	CleanDindContainers() error
 	BuildDindContainers(nDindContainer int8) error
 	PrintDindList() error
 	GetAvailableDind() (string, error)
@@ -49,6 +50,52 @@ func GenerateUUIDv4() (string, error) {
 	uuid[8] = (uuid[8] & 0x3f) | 0x80
 
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16]), nil
+}
+
+func (a *DindManager) CleanDindContainers() error {
+
+	// print the number of DIND containers to be created
+	log.G(a.Ctx).Info(fmt.Sprintf("\u2705 Start cleaning zombie DIND containers"))
+
+	// exec this command docker ps -a --format "{{.Names}}" | grep '_dind$' | wc -l
+	shell := exec.ExecTask{
+		Command: "docker",
+		Args:    []string{"ps", "-a", "--format", "{{.Names}}", "|", "grep", "_dind$", "|", "wc", "-l"},
+		Shell:   true,
+	}
+	execReturn, err := shell.Execute()
+	if err != nil {
+		return err
+	}
+
+	// log the number of zombie DIND containers (remove the \n at the end of the string)
+	log.G(a.Ctx).Info(fmt.Sprintf("\u2705 %s zombie DIND containers found", strings.ReplaceAll(execReturn.Stdout, "\n", "")))
+
+	shell = exec.ExecTask{
+		Command: "docker",
+		Args:    []string{"ps", "-a", "--format", "{{.Names}}", "|", "grep", "_dind$", "|", "xargs", "-I", "{}", "docker", "rm", "-f", "{}"},
+		Shell:   true,
+	}
+	_, err = shell.Execute()
+	if err != nil {
+		return err
+	}
+
+	// exec this command  docker network ls --filter name=_dind_network$ --format "{{.ID}}" | xargs -r docker network rm
+
+	shell = exec.ExecTask{
+		Command: "docker",
+		Args:    []string{"network", "ls", "--filter", "name=_dind_network$", "--format", "{{.ID}}", "|", "xargs", "-r", "docker", "network", "rm"},
+		Shell:   true,
+	}
+	_, err = shell.Execute()
+	if err != nil {
+		return err
+	}
+
+	log.G(a.Ctx).Info(fmt.Sprintf("\u2705 DIND zombie containers cleaned"))
+
+	return nil
 }
 
 func (a *DindManager) BuildDindContainers(nDindContainer int8) error {

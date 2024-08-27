@@ -47,6 +47,7 @@ func main() {
 	if err != nil {
 		log.G(Ctx).Fatal(err)
 	}
+	dindHandler.CleanDindContainers()
 	dindHandler.BuildDindContainers(int8(availableDindsInt))
 
 	SidecarAPIs := docker.SidecarHandler{
