@@ -12,11 +12,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
+	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/dindmanager"
 )
 
 type SidecarHandler struct {
-	Config commonIL.InterLinkConfig
-	Ctx    context.Context
+	Config      commonIL.InterLinkConfig
+	Ctx         context.Context
+	DindManager dindmanager.DindManagerInterface
 }
 
 func parseContainerCommandAndReturnArgs(Ctx context.Context, config commonIL.InterLinkConfig, podUID string, podNamespace string, container v1.Container) ([]string, []string, []string, error) {
