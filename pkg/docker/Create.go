@@ -16,9 +16,24 @@ import (
 	"errors"
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
+	"github.com/intertwin-eu/interlink-docker-plugin/pkg/docker/dindmanager"
 
 	"path/filepath"
 )
+
+func (h *SidecarHandler) CheckGpuRequestFromContainer(containerData v1.Container) error {
+
+	numGpusRequested := 0
+	if val, ok := containerData.Resources.Limits["nvidia.com/gpu"]; ok {
+		numGpusRequested = int(val.Value())
+	}
+
+	if numGpusRequested > 0 {
+		return errors.New("GPU requests are not supported")
+	}
+
+	return nil
+}
 
 func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w http.ResponseWriter) ([]DockerRunStruct, error) {
 
@@ -76,6 +91,12 @@ func (h *SidecarHandler) prepareDockerRuns(podData commonIL.RetrievedPodData, w 
 		for _, container := range containers {
 
 			containerName := podNamespace + "-" + podUID + "-" + container.Name
+
+			// check if the container has GPU requests
+			err := h.CheckGpuRequestFromContainer(container)
+			if err != nil {
+				return dockerRunStructs, errors.New("GPU requests are not supported")
+			}
 
 			var envVars string = ""
 			for _, envVar := range container.Env {
@@ -517,5 +538,36 @@ func HandleErrorAndRemoveData(h *SidecarHandler, w http.ResponseWriter, s string
 
 	if podNamespace != "" && podUID != "" {
 		os.RemoveAll(h.Config.DataRootFolder + podNamespace + "-" + podUID)
+	}
+
+	dindSpec := dindmanager.DindSpecs{}
+	dindSpec, err = h.DindManager.GetDindFromPodUID(podUID)
+
+	if err != nil {
+		log.G(h.Ctx).Error("\u274C [CREATE CALL] Error retrieving DindSpecs, maybe the Dind container has already been deleted")
+	} else {
+		log.G(h.Ctx).Info("\u2705 [CREATE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
+
+		// log the retrieved dindSpec
+		log.G(h.Ctx).Info("\u2705 [CREATE CALL] Retrieved DindSpecs: " + dindSpec.DindID + " " + dindSpec.PodUID + " " + dindSpec.DindNetworkID + " ")
+
+		cmd := []string{"network", "rm", dindSpec.DindNetworkID}
+		shell := exec.ExecTask{
+			Command: "docker",
+			Args:    cmd,
+			Shell:   true,
+		}
+		execReturn, _ := shell.Execute()
+		execReturn.Stdout = strings.ReplaceAll(execReturn.Stdout, "\n", "")
+		if execReturn.Stderr != "" {
+			log.G(h.Ctx).Error("\u274C [CREATE CALL] Error deleting network " + dindSpec.DindNetworkID)
+		} else {
+			log.G(h.Ctx).Info("\u2705 [CREATE CALL] Deleted network " + dindSpec.DindNetworkID)
+		}
+		// set the dind available again
+		err = h.DindManager.RemoveDindFromList(dindSpec.PodUID)
+		if err != nil {
+			log.G(h.Ctx).Error("\u274C [CREATE CALL] Error setting DIND container available")
+		}
 	}
 }
