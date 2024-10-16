@@ -84,7 +84,36 @@ func main() {
 	mutex.HandleFunc("/create", SidecarAPIs.CreateHandler)
 	mutex.HandleFunc("/delete", SidecarAPIs.DeleteHandler)
 	mutex.HandleFunc("/getLogs", SidecarAPIs.GetLogsHandler)
-	err = http.ListenAndServe(":"+interLinkConfig.Sidecarport, mutex)
+
+	if strings.HasPrefix(interLinkConfig.Socket, "unix://") {
+		// Create a Unix domain socket and listen for incoming connections.
+		socket, err := net.Listen("unix", strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
+		if err != nil {
+			panic(err)
+		}
+
+		// Cleanup the sockfile.
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			<-c
+			os.Remove(strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
+			os.Exit(1)
+		}()
+		server := http.Server{
+			Handler: mutex,
+		}
+
+		log.G(Ctx).Info(socket)
+
+		if err := server.Serve(socket); err != nil {
+			log.G(Ctx).Fatal(err)
+		}
+	} else {
+		err = http.ListenAndServe(":"+interLinkConfig.Sidecarport, mutex)
+		if err != nil {
+			log.G(Ctx).Fatal(err)
+		}
 
 	if err != nil {
 		log.G(Ctx).Fatal(err)

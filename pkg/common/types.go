@@ -48,6 +48,7 @@ type InterLinkConfig struct {
 	Scancelpath       string `yaml:"ScancelPath"`
 	Squeuepath        string `yaml:"SqueuePath"`
 	Interlinkport     string `yaml:"InterlinkPort"`
+	Socket            string `yaml:"Socket"`
 	Sidecarport       string `yaml:"SidecarPort"`
 	Commandprefix     string `yaml:"CommandPrefix"`
 	ExportPodData     bool   `yaml:"ExportPodData"`
