@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -114,6 +118,7 @@ func main() {
 		if err != nil {
 			log.G(Ctx).Fatal(err)
 		}
+	}
 
 	if err != nil {
 		log.G(Ctx).Fatal(err)
