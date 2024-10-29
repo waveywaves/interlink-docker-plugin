@@ -132,6 +132,9 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 			Shell:   true,
 		}
 		_, err = shell.Execute()
+		if err != nil {
+			return err
+		}
 
 		log.G(a.Ctx).Info(fmt.Sprintf("\u2705 DIND network %s created", randUID+"_dind_network"))
 
@@ -141,7 +144,9 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 
 		dindContainerArgs := []string{"run"}
 		//dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
-		if _, err := os.Stat("/cvmfs"); err == nil {
+		if _, err := os.Stat("/cvmfs"); err != nil {
+			return err
+		} else {
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
 		}
 
@@ -180,9 +185,12 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 
 			cmd := OSexec.Command("docker", "logs", randUID+"_dind")
 			output, err = cmd.CombinedOutput()
-
-			if err != nil {
+			retries := 0
+			if retries < 5 && err != nil {
 				time.Sleep(1 * time.Second)
+				retries += 1
+			} else {
+				return err
 			}
 
 			if strings.Contains(string(output), "API listen on /var/run/docker.sock") {

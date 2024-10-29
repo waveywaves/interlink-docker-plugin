@@ -51,10 +51,11 @@ func main() {
 	if err != nil {
 		log.G(Ctx).Fatal(err)
 	}
+
+	// clean and build dind containers
 	if err := dindHandler.CleanDindContainers(); err != nil {
 		log.G(Ctx).Fatal(err)
 	}
-
 	if err := dindHandler.BuildDindContainers(int8(availableDindsInt)); err != nil {
 		log.G(Ctx).Fatal(err)
 	}
