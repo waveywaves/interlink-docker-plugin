@@ -144,7 +144,7 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 			log.G(a.Ctx).Info(fmt.Sprintf("error while checking if /cvmfs exists: %s", err.Error()))
 			return err
 		} else {
-			log.G(a.Ctx).Info(fmt.Sprintf("found /cvmfs")
+			log.G(a.Ctx).Info(fmt.Sprintf("found /cvmfs"))
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
 		}
 
