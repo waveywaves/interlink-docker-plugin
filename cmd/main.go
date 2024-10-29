@@ -60,6 +60,11 @@ func main() {
 		log.G(Ctx).Fatal(err)
 	}
 
+	// check list of dind containers
+	if err := dindHandler.PrintDindList(); err != nil {
+		log.G(Ctx).Fatal(err)
+	}
+
 	SidecarAPIs := docker.SidecarHandler{
 		Config:      interLinkConfig,
 		Ctx:         Ctx,
