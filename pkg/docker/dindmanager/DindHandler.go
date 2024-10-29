@@ -142,7 +142,6 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 		//dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
 		if _, err := os.Stat("/cvmfs"); err != nil {
 			log.G(a.Ctx).Info(fmt.Sprintf("error while checking if /cvmfs exists: %s", err.Error()))
-			return err
 		} else {
 			log.G(a.Ctx).Info(fmt.Sprintf("found /cvmfs"))
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
