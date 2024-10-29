@@ -78,9 +78,12 @@ func main() {
 	mutex.HandleFunc("/getLogs", SidecarAPIs.GetLogsHandler)
 
 	if strings.HasPrefix(interLinkConfig.Socket, "unix://") {
+		log.G(Ctx).Info("Starting InterLink server on socket " + interLinkConfig.Socket)
 		// Create a Unix domain socket and listen for incoming connections.
-		socket, err := net.Listen("unix", strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
+		address := strings.ReplaceAll(interLinkConfig.Socket, "unix://", "")
+		socket, err := net.Listen("unix", address)
 		if err != nil {
+			log.G(Ctx).Fatal(err)
 			panic(err)
 		}
 
@@ -89,7 +92,7 @@ func main() {
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-c
-			os.Remove(strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
+			os.Remove(address)
 			os.Exit(1)
 		}()
 		server := http.Server{
@@ -102,6 +105,7 @@ func main() {
 			log.G(Ctx).Fatal(err)
 		}
 	} else {
+		log.G(Ctx).Info("Starting InterLink server on port " + interLinkConfig.Sidecarport)
 		err = http.ListenAndServe(":"+interLinkConfig.Sidecarport, mutex)
 		if err != nil {
 			log.G(Ctx).Fatal(err)
