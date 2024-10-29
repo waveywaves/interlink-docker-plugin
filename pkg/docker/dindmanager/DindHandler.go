@@ -138,15 +138,13 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 
 		log.G(a.Ctx).Info(fmt.Sprintf("\u2705 DIND network %s created", randUID+"_dind_network"))
 
-		if err != nil {
-			return err
-		}
-
 		dindContainerArgs := []string{"run"}
 		//dindContainerArgs = append(dindContainerArgs, gpuArgsAsArray...)
 		if _, err := os.Stat("/cvmfs"); err != nil {
+			log.G(a.Ctx).Info(fmt.Sprintf("error while checking if /cvmfs exists: %s", err.Error()))
 			return err
 		} else {
+			log.G(a.Ctx).Info(fmt.Sprintf("found /cvmfs")
 			dindContainerArgs = append(dindContainerArgs, "-v", "/cvmfs:/cvmfs")
 		}
 
@@ -185,10 +183,8 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 
 			cmd := OSexec.Command("docker", "logs", randUID+"_dind")
 			output, err = cmd.CombinedOutput()
-			retries := 0
-			if retries < 5 && err != nil {
+			if err != nil {
 				time.Sleep(1 * time.Second)
-				retries += 1
 			} else {
 				return err
 			}
