@@ -183,9 +183,8 @@ func (a *DindManager) BuildDindContainers(nDindContainer int8) error {
 			cmd := OSexec.Command("docker", "logs", randUID+"_dind")
 			output, err = cmd.CombinedOutput()
 			if err != nil {
+				log.G(a.Ctx).Info(fmt.Sprintf("DIND container %s not up and running yet : %s", dindContainerID, err.Error()))
 				time.Sleep(1 * time.Second)
-			} else {
-				return err
 			}
 
 			if strings.Contains(string(output), "API listen on /var/run/docker.sock") {
