@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
-	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+
+	"github.com/sirupsen/logrus"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 
 	commonIL "github.com/intertwin-eu/interlink-docker-plugin/pkg/common"
 	docker "github.com/intertwin-eu/interlink-docker-plugin/pkg/docker"
@@ -48,8 +51,13 @@ func main() {
 	if err != nil {
 		log.G(Ctx).Fatal(err)
 	}
-	dindHandler.CleanDindContainers()
-	dindHandler.BuildDindContainers(int8(availableDindsInt))
+	if err := dindHandler.CleanDindContainers(); err != nil {
+		log.G(Ctx).Fatal(err)
+	}
+
+	if err := dindHandler.BuildDindContainers(int8(availableDindsInt)); err != nil {
+		log.G(Ctx).Fatal(err)
+	}
 
 	SidecarAPIs := docker.SidecarHandler{
 		Config:      interLinkConfig,
@@ -65,37 +73,28 @@ func main() {
 
 	if strings.HasPrefix(interLinkConfig.Socket, "unix://") {
 		// Create a Unix domain socket and listen for incoming connections.
-		address := strings.ReplaceAll(interLinkConfig.Socket, "unix://", "")
-		socket, err := net.Listen("unix", address)
+		socket, err := net.Listen("unix", strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
 		if err != nil {
 			panic(err)
 		}
-		defer func() {
-			socket.Close()
-			log.G(Ctx).Info("Cleaning up socket file" + address)
-			os.Remove(address)
-		}()
 
-		//// Cleanup the sockfile.
-		//c := make(chan os.Signal, 1)
-		//signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		//go func() {
-		//	<-c
-		//	os.Remove(address)
-		//	log.G(Ctx).Info("Cleaning up socket file" + address)
-		//	os.Exit(1)
-		//}()
+		// Cleanup the sockfile.
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			<-c
+			os.Remove(strings.ReplaceAll(interLinkConfig.Socket, "unix://", ""))
+			os.Exit(1)
+		}()
 		server := http.Server{
 			Handler: mutex,
 		}
 
 		log.G(Ctx).Info(socket)
 
-		log.G(Ctx).Info("Starting to listen on unix socket: " + address)
 		if err := server.Serve(socket); err != nil {
 			log.G(Ctx).Fatal(err)
 		}
-		log.G(Ctx).Info("Successfully listening on unix socket: " + address)
 	} else {
 		err = http.ListenAndServe(":"+interLinkConfig.Sidecarport, mutex)
 		if err != nil {
